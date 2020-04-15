@@ -69,7 +69,7 @@
 
 [submodule "components/bt/host/nimble/nimble"]
 	path = components/bt/host/nimble/nimble
-	url = git@github.com:zacwbond/esp-nimble
+	url = git@github.com:bigassdata/esp-nimble
 
 [submodule "components/cbor/tinycbor"]
 	path = components/cbor/tinycbor
