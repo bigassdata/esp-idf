@@ -14,8 +14,6 @@
 
 #include <stdint.h>
 
-#include "btc/btc_manage.h"
-
 #include "esp_err.h"
 
 #include "btc_ble_mesh_prov.h"
@@ -44,6 +42,9 @@ uint16_t *esp_ble_mesh_is_model_subscribed_to_group(esp_ble_mesh_model_t *model,
 
 esp_ble_mesh_elem_t *esp_ble_mesh_find_element(uint16_t element_addr)
 {
+    if (!ESP_BLE_MESH_ADDR_IS_UNICAST(element_addr)) {
+        return NULL;
+    }
     return btc_ble_mesh_elem_find(element_addr);
 }
 

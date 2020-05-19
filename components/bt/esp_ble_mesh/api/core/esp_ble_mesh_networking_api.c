@@ -15,8 +15,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "btc/btc_manage.h"
-
 #include "esp_err.h"
 
 #include "btc_ble_mesh_prov.h"
@@ -71,9 +69,9 @@ static esp_err_t ble_mesh_model_send_msg(esp_ble_mesh_model_t *model,
     }
 
     if (act == BTC_BLE_MESH_ACT_MODEL_PUBLISH) {
-        mic_len = 4;
+        mic_len = ESP_BLE_MESH_MIC_SHORT;
     } else {
-        mic_len = ctx->send_rel ? 8 : 4;
+        mic_len = ctx->send_rel ? ESP_BLE_MESH_MIC_LONG : ESP_BLE_MESH_MIC_SHORT;
     }
 
     if (op_len + length + mic_len > MIN(ESP_BLE_MESH_SDU_MAX_LEN, ESP_BLE_MESH_TX_SDU_MAX)) {
@@ -268,7 +266,8 @@ esp_err_t esp_ble_mesh_provisioner_set_node_name(uint16_t index, const char *nam
 
     arg.set_node_name.index = index;
     memset(arg.set_node_name.name, 0, sizeof(arg.set_node_name.name));
-    memcpy(arg.set_node_name.name, name, strlen(name));
+    strncpy(arg.set_node_name.name, name, ESP_BLE_MESH_NODE_NAME_MAX_LEN);
+
     return (btc_transfer_context(&msg, &arg, sizeof(btc_ble_mesh_prov_args_t), NULL)
             == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
 }

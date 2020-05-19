@@ -109,7 +109,7 @@ static enum {
     MESH_GATT_PROXY,
 } gatt_svc = MESH_GATT_NONE;
 
-static char device_name[DEVICE_NAME_SIZE] = "ESP-BLE-MESH";
+static char device_name[DEVICE_NAME_SIZE + 1] = "ESP-BLE-MESH";
 
 int bt_mesh_set_device_name(const char *name)
 {
@@ -124,7 +124,7 @@ int bt_mesh_set_device_name(const char *name)
     }
 
     memset(device_name, 0x0, sizeof(device_name));
-    memcpy(device_name, name, strlen(name));
+    strncpy(device_name, name, DEVICE_NAME_SIZE);
 
     return bt_mesh_gatts_set_local_device_name(device_name);
 }
@@ -1174,7 +1174,7 @@ static bool advertise_subnet(struct bt_mesh_subnet *sub)
     }
 
     return (sub->node_id == BLE_MESH_NODE_IDENTITY_RUNNING ||
-            bt_mesh_gatt_proxy_get() == BLE_MESH_GATT_PROXY_ENABLED);
+            bt_mesh_gatt_proxy_get() != BLE_MESH_GATT_PROXY_NOT_SUPPORTED);
 }
 
 static struct bt_mesh_subnet *next_sub(void)
@@ -1252,11 +1252,7 @@ static s32_t gatt_proxy_advertise(struct bt_mesh_subnet *sub)
     }
 
     if (sub->node_id == BLE_MESH_NODE_IDENTITY_STOPPED) {
-        if (bt_mesh_gatt_proxy_get() == BLE_MESH_GATT_PROXY_ENABLED) {
-            net_id_adv(sub);
-        } else {
-            return gatt_proxy_advertise(next_sub());
-        }
+        net_id_adv(sub);
     }
 
     subnet_count = sub_count();
@@ -1419,11 +1415,6 @@ int bt_mesh_proxy_init(void)
     }
 
     bt_mesh_gatts_conn_cb_register(&conn_callbacks);
-
-#if defined(CONFIG_BLE_MESH_PB_GATT)
-    const struct bt_mesh_prov *prov = bt_mesh_prov_get();
-    __ASSERT(prov && prov->uuid, "%s, Device UUID is not initialized", __func__);
-#endif
 
     return bt_mesh_gatts_set_local_device_name(device_name);
 }

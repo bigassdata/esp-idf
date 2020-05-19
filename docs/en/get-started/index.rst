@@ -70,11 +70,15 @@ If you have one of {IDF_TARGET_NAME} development boards listed below, you can cl
         ESP-WROVER-KIT <../hw-reference/esp32/get-started-wrover-kit>
         ESP32-PICO-KIT <../hw-reference/esp32/get-started-pico-kit>
         ESP32-Ethernet-Kit <../hw-reference/esp32/get-started-ethernet-kit>
+        ESP32-DevKit-S(-R) <../hw-reference/esp32/user-guide-devkits-r-v1.1>
 
 .. only:: esp32s2
 
-    There are currently no hardware guides available for ESP32-S2.
+    .. toctree::
+        :maxdepth: 1
 
+        ESP32-S2-Saola-1 <../hw-reference/esp32s2/user-guide-saola-1-v1.2>
+        ESP32-S2-Kaluga-Kit <../hw-reference/esp32s2/user-guide-esp32-s2-kaluga-1-kit>
 
 .. _get-started-step-by-step:
 
@@ -245,7 +249,13 @@ In the terminal where you are going to use ESP-IDF, run:
 
 Note the space between the leading dot and the path!
 
-You can also automate this step, making ESP-IDF tools available in every terminal, by adding this line to your ``.profile`` or ``.bash_profile`` script.
+You can also create an alias for the export script to your ``.profile`` or ``.bash_profile`` script. This way you can set up the environment in a new terminal window by typing ``get_idf``:
+
+.. code-block:: bash
+
+    alias get_idf='. $HOME/esp/esp-idf/export.sh'
+
+Note that it is not recommended to source ``export.sh`` from the profile script directly. Doing so activates IDF virtual environment in every terminal session (even in those where IDF is not needed), defeating the purpose of the virtual environment and likely affecting other software.
 
 .. _get-started-start-project:
 
@@ -585,13 +595,7 @@ Now you are ready to try some other :idf:`examples`, or go straight to developin
 
     Some of examples do not support {IDF_TARGET_NAME} because required hardware is not included in {IDF_TARGET_NAME} so it cannot be supported.
 
-    .. only:: esp32
-
-        If building an example, please check the example CMakeLists.txt file for the clause ``SUPPORTED_TARGETS esp32``. If this is present including ``esp32`` target, or ``SUPPORTED_TARGETS`` does not exist at all, the example will work on {IDF_TARGET_NAME}.
-
-    .. only:: esp32s2
-
-        If building an example, please check the example CMakeLists.txt file for the clause ``SUPPORTED_TARGETS esp32s2``. If this is present including ``esp32s2`` target, or ``SUPPORTED_TARGETS`` does not exist at all, the example will work on {IDF_TARGET_NAME}.
+    If building an example, please check the README file for the ``Supported Targets`` table. If this is present including {IDF_TARGET_NAME} target, or the table does not exist at all, the example will work on {IDF_TARGET_NAME}.
 
 
 Updating ESP-IDF

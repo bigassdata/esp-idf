@@ -867,7 +867,11 @@ int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len)
                 }
                 ESP_LOG_LEVEL(sev, TAG, "esp_transport_read returned:%d and errno:%d ", rlen, errno);
             }
-            return ridx;
+            if (rlen < 0 && ridx == 0) {
+                return ESP_FAIL;
+            } else {
+                return ridx;
+            }
         }
         res_buffer->output_ptr = buffer + ridx;
         http_parser_execute(client->parser, client->parser_settings, res_buffer->data, rlen);
@@ -1314,4 +1318,31 @@ void esp_http_client_add_auth(esp_http_client_handle_t client)
         client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
         ESP_LOGW(TAG, "This request requires authentication, but does not provide header information for that");
     }
+}
+
+int esp_http_client_read_response(esp_http_client_handle_t client, char *buffer, int len)
+{
+    int read_len = 0;
+    while (read_len < len) {
+        int data_read = esp_http_client_read(client, buffer + read_len, len - read_len);
+        if (data_read <= 0) {
+            return read_len;
+        }
+        read_len += data_read;
+    }
+    return read_len;
+}
+
+esp_err_t esp_http_client_get_url(esp_http_client_handle_t client, char *url, const int len)
+{
+    if (client == NULL || url == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (client->connection_info.host && client->connection_info.scheme && client->connection_info.path) {
+        snprintf(url, len, "%s://%s%s", client->connection_info.scheme, client->connection_info.host, client->connection_info.path);
+        return ESP_OK;
+    } else {
+        ESP_LOGE(TAG, "Failed to get URL");
+    }
+    return ESP_FAIL;
 }

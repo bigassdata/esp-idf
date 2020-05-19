@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+#include "esp_attr.h"
+
 #include "soc/cpu_caps.h"
 
 #include "xt_instr_macros.h"
@@ -27,7 +29,7 @@
 extern "C" {
 #endif
 
-static inline int cpu_ll_get_core_id(void)
+static inline int IRAM_ATTR cpu_ll_get_core_id(void)
 {
     uint32_t id;
     asm volatile (
@@ -164,6 +166,11 @@ static inline bool cpu_ll_is_debugger_attached(void)
 static inline void cpu_ll_break(void)
 {
     __asm__ ("break 0,0");
+}
+
+static inline void cpu_ll_set_vecbase(const void* vecbase)
+{
+    asm volatile ("wsr %0, vecbase" :: "r" (vecbase));
 }
 
 #ifdef __cplusplus

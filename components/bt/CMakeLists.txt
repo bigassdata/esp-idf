@@ -47,6 +47,7 @@ if(CONFIG_BT_ENABLED)
             host/bluedroid/btc/profile/esp/blufi/include
             host/bluedroid/btc/profile/esp/include
             host/bluedroid/btc/profile/std/a2dp/include
+            host/bluedroid/btc/profile/std/hid/include
             host/bluedroid/btc/profile/std/include
             host/bluedroid/btc/include
             host/bluedroid/stack/btm/include
@@ -166,6 +167,8 @@ if(CONFIG_BT_ENABLED)
                    "host/bluedroid/btc/profile/std/hf_ag/btc_hf_ag.c"
                    "host/bluedroid/btc/profile/std/hf_client/btc_hf_client.c"
                    "host/bluedroid/btc/profile/std/hf_client/bta_hf_client_co.c"
+                   "host/bluedroid/btc/profile/std/hid/hidh_api.c"
+                   "host/bluedroid/btc/profile/std/hid/hidh_conn.c"
                    "host/bluedroid/btc/profile/std/gap/btc_gap_ble.c"
                    "host/bluedroid/btc/profile/std/gap/btc_gap_bt.c"
                    "host/bluedroid/btc/profile/std/gap/bta_gap_bt_co.c"
@@ -323,7 +326,8 @@ if(CONFIG_BT_ENABLED)
                     "esp_ble_mesh/api/models/include"
                     "esp_ble_mesh/api")
 
-        list(APPEND srcs "esp_ble_mesh/api/core/esp_ble_mesh_common_api.c"
+        list(APPEND srcs "esp_ble_mesh/api/core/esp_ble_mesh_ble_api.c"
+                    "esp_ble_mesh/api/core/esp_ble_mesh_common_api.c"
                     "esp_ble_mesh/api/core/esp_ble_mesh_local_data_operation_api.c"
                     "esp_ble_mesh/api/core/esp_ble_mesh_low_power_api.c"
                     "esp_ble_mesh/api/core/esp_ble_mesh_networking_api.c"
@@ -347,6 +351,8 @@ if(CONFIG_BT_ENABLED)
                     "esp_ble_mesh/mesh_common/mesh_buf.c"
                     "esp_ble_mesh/mesh_common/mesh_common.c"
                     "esp_ble_mesh/mesh_common/mesh_kernel.c"
+                    "esp_ble_mesh/mesh_common/mesh_mutex.c"
+                    "esp_ble_mesh/mesh_common/mesh_timer.c"
                     "esp_ble_mesh/mesh_common/mesh_util.c"
                     "esp_ble_mesh/mesh_core/storage/settings_nvs.c"
                     "esp_ble_mesh/mesh_core/access.c"

@@ -66,6 +66,7 @@
 #define DR_REG_PCNT_BASE                        0x3f417000
 #define DR_REG_SLC_BASE                         0x3f418000
 #define DR_REG_LEDC_BASE                        0x3f419000
+#define DR_REG_MCP_BASE                         0x3f4c3000
 #define DR_REG_EFUSE_BASE                       0x3f41A000
 #define DR_REG_NRX_BASE                         0x3f41CC00
 #define DR_REG_BB_BASE                          0x3f41D000
@@ -270,9 +271,13 @@
 #define SOC_DIRAM_DRAM_LOW    0x3FFB0000
 #define SOC_DIRAM_DRAM_HIGH   0x40000000
 
-// Region of memory accessible via DMA. See esp_ptr_dma_capable().
+// Region of memory accessible via DMA in internal memory. See esp_ptr_dma_capable().
 #define SOC_DMA_LOW  0x3FFB0000
 #define SOC_DMA_HIGH 0x40000000
+
+// Region of memory accessible via DMA in external memory. See esp_ptr_dma_ext_capable().
+#define SOC_DMA_EXT_LOW     0x3F500000
+#define SOC_DMA_EXT_HIGH    0x3FF80000
 
 // Region of memory that is byte-accessible. See esp_ptr_byte_accessible().
 #define SOC_BYTE_ACCESSIBLE_LOW     0x3FF9E000
@@ -331,7 +336,7 @@
 #define ETS_TG0_T1_INUM                         10 /**< use edge interrupt*/
 #define ETS_FRC1_INUM                           22
 #define ETS_T1_WDT_INUM                         24
-#define ETS_CACHEERR_INUM                       25
+#define ETS_MEMACCESS_ERR_INUM                  25
 #define ETS_DPORT_INUM                          28
 
 //CPU0 Interrupt number used in ROM, should be cancelled in SDK

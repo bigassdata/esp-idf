@@ -960,7 +960,7 @@ Selecting the Target
 
 ESP-IDF supports multiple targets (chips). The identifiers used for each chip are as follows:
 
-* ``esp32`` — for ESP32-D0WD, ESP32-D2WD, ESP32-S0WD (ESP-SOLO), ESP32-U4WD, ESP32-PICO-D4
+* ``esp32`` — for ESP32-D0WD, ESP32-D2WD, ESP32-S0WD (ESP-SOLO), ESP32-U4WDH, ESP32-PICO-D4
 * ``esp32s2``— for ESP32-S2
 
 To select the target before building the project, use ``idf.py set-target <target>`` command, for example::
@@ -1217,6 +1217,7 @@ For example, to get the Python interpreter used for the build:
   - CXX_COMPILE_OPTIONS - compile options applied to all components' C++ source files
   - EXECUTABLE - project executable; set by call to ``idf_build_executable``
   - EXECUTABLE_NAME - name of project executable without extension; set by call to ``idf_build_executable``
+  - EXECUTABLE_DIR - path containing the output executable
   - IDF_PATH - ESP-IDF path; set from IDF_PATH environment variable, if not, inferred from the location of ``idf.cmake``
   - IDF_TARGET - target chip for the build; set from the required target argument for ``idf_build_process``
   - IDF_VER - ESP-IDF version; set from either a version file or the Git revision of the IDF_PATH repository
@@ -1543,7 +1544,7 @@ Flashing from make
 .. _cmake project: https://cmake.org/cmake/help/v3.5/command/project.html
 .. _cmake set: https://cmake.org/cmake/help/v3.5/command/set.html
 .. _cmake string: https://cmake.org/cmake/help/v3.5/command/string.html
-.. _cmake faq generated files: https://cmake.org/Wiki/CMake_FAQ#How_can_I_generate_a_source_file_during_the_build.3F
+.. _cmake faq generated files: https://gitlab.kitware.com/cmake/community/-/wikis/FAQ#how-can-i-generate-a-source-file-during-the-build
 .. _ADDITIONAL_MAKE_CLEAN_FILES: https://cmake.org/cmake/help/v3.5/prop_dir/ADDITIONAL_MAKE_CLEAN_FILES.html
 .. _ExternalProject: https://cmake.org/cmake/help/v3.5/module/ExternalProject.html
 .. _cmake language variables: https://cmake.org/cmake/help/v3.5/manual/cmake-variables.7.html#variables-for-languages
@@ -1552,6 +1553,6 @@ Flashing from make
 .. _target_link_libraries: https://cmake.org/cmake/help/v3.5/command/target_link_libraries.html#command:target_link_libraries
 .. _cmake_toolchain_file: https://cmake.org/cmake/help/v3.5/variable/CMAKE_TOOLCHAIN_FILE.html
 .. _quirc: https://github.com/dlbeer/quirc
-.. _pyenv: https://github.com/pyenv/pyenv#README
+.. _pyenv: https://github.com/pyenv/pyenv#readme
 .. _virtualenv: https://virtualenv.pypa.io/en/stable/
 .. _CCache: https://ccache.dev/

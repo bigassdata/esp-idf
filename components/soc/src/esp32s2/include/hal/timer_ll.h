@@ -29,11 +29,6 @@ _Static_assert(TIMER_INTR_T0 == TIMG_T0_INT_CLR, "Add mapping to LL interrupt ha
 _Static_assert(TIMER_INTR_T1 == TIMG_T1_INT_CLR, "Add mapping to LL interrupt handling, since it's no longer naturally compatible with the timer_intr_t");
 _Static_assert(TIMER_INTR_WDT == TIMG_WDT_INT_CLR, "Add mapping to LL interrupt handling, since it's no longer naturally compatible with the timer_intr_t");
 
-typedef struct {
-    timg_dev_t *dev;
-    timer_idx_t idx;
-} timer_ll_context_t;
-
 // Get timer group instance with giving group number
 #define TIMER_LL_GET_HW(num) ((num == 0) ? (&TIMERG0) : (&TIMERG1))
 
@@ -42,12 +37,16 @@ typedef struct {
  *
  * @param hw Beginning address of the peripheral registers.
  * @param timer_num The timer number
- * @param divider Prescale value
+ * @param divider Prescale value (0 is not valid)
  *
  * @return None
  */
-static inline void timer_ll_set_divider(timg_dev_t *hw, timer_idx_t timer_num, uint16_t divider)
+static inline void timer_ll_set_divider(timg_dev_t *hw, timer_idx_t timer_num, uint32_t divider)
 {
+    // refer to TRM 12.2.1
+    if (divider == 65536) {
+        divider = 0;
+    }
     int timer_en = hw->hw_timer[timer_num].config.enable;
     hw->hw_timer[timer_num].config.enable = 0;
     hw->hw_timer[timer_num].config.divider = divider;
@@ -63,9 +62,13 @@ static inline void timer_ll_set_divider(timg_dev_t *hw, timer_idx_t timer_num, u
  *
  * @return None
  */
-static inline void timer_ll_get_divider(timg_dev_t *hw, timer_idx_t timer_num, uint16_t *divider)
+static inline void timer_ll_get_divider(timg_dev_t *hw, timer_idx_t timer_num, uint32_t *divider)
 {
-    *divider = hw->hw_timer[timer_num].config.divider;
+    uint32_t d = hw->hw_timer[timer_num].config.divider;
+    if (d == 0) {
+        d = 65536;
+    }
+    *divider = d;
 }
 
 /**
@@ -255,6 +258,7 @@ static inline bool timer_ll_get_alarm_enable(timg_dev_t *hw, timer_idx_t timer_n
 FORCE_INLINE_ATTR void timer_ll_intr_enable(timg_dev_t *hw, timer_idx_t timer_num)
 {
     hw->int_ena.val |= BIT(timer_num);
+    hw->hw_timer[timer_num].config.level_int_en = 1;
 }
 
 /**
@@ -268,6 +272,7 @@ FORCE_INLINE_ATTR void timer_ll_intr_enable(timg_dev_t *hw, timer_idx_t timer_nu
 FORCE_INLINE_ATTR void timer_ll_intr_disable(timg_dev_t *hw, timer_idx_t timer_num)
 {
     hw->int_ena.val &= (~BIT(timer_num));
+    hw->hw_timer[timer_num].config.level_int_en = 0;
 }
 
 /**
@@ -372,13 +377,17 @@ static inline bool timer_ll_get_edge_int_enable(timg_dev_t *hw, timer_idx_t time
  * @brief Get interrupt status register address.
  *
  * @param hw Beginning address of the peripheral registers.
- * @param intr_status_reg Interrupt status register address
  *
- * @return None
+ * @return uint32_t Interrupt status register address
  */
-static inline void timer_ll_get_intr_status_reg(timg_dev_t *hw, uint32_t *intr_status_reg)
+static inline uint32_t timer_ll_get_intr_status_reg(timg_dev_t *hw)
 {
-    *intr_status_reg = (uint32_t)&(hw->int_st.val);
+    return (uint32_t) & (hw->int_st.val);
+}
+
+static inline uint32_t timer_ll_get_intr_mask_bit(timg_dev_t *hw, timer_idx_t timer_num)
+{
+    return (1U << timer_num);
 }
 
 /**
@@ -406,157 +415,6 @@ static inline void timer_ll_set_use_xtal(timg_dev_t *hw, timer_idx_t timer_num, 
 static inline bool timer_ll_get_use_xtal(timg_dev_t *hw, timer_idx_t timer_num)
 {
     return hw->hw_timer[timer_num].config.use_xtal;
-}
-
-/* WDT operations */
-
-/**
- * @brief Unlock/lock the WDT register in case of mis-operations.
- *
- * @param hw Beginning address of the peripheral registers.
- * @param protect true to lock, false to unlock before operations.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_set_protect(timg_dev_t* hw, bool protect)
-{
-    hw->wdt_wprotect=(protect? 0: TIMG_WDT_WKEY_VALUE);
-}
-
-/**
- * @brief Initialize WDT.
- *
- * @param hw Beginning address of the peripheral registers.
- *
- * @note Call `timer_ll_wdt_set_protect` first
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_init(timg_dev_t* hw)
-{
-    hw->wdt_config0.sys_reset_length=7;                 //3.2uS
-    hw->wdt_config0.cpu_reset_length=7;                 //3.2uS
-    //currently only level interrupt is supported
-    hw->wdt_config0.level_int_en = 1;
-    hw->wdt_config0.edge_int_en = 0;
-}
-
-/**
- * @brief Set the WDT tick time.
- *
- * @param hw Beginning address of the peripheral registers.
- * @param tick_time_us Tick time.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_set_tick(timg_dev_t* hw, int tick_time_us)
-{
-    hw->wdt_config1.clk_prescale=80*tick_time_us;
-}
-
-/**
- * @brief Feed the WDT.
- *
- * @param hw Beginning address of the peripheral registers.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_feed(timg_dev_t* hw)
-{
-    hw->wdt_feed = 1;
-}
-
-/**
- * @brief Set the WDT timeout.
- *
- * @param hw Beginning address of the peripheral registers.
- * @param stage Stage number of WDT.
- * @param timeout_Tick tick threshold of timeout.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_set_timeout(timg_dev_t* hw, int stage, uint32_t timeout_tick)
-{
-    switch (stage) {
-    case 0:
-        hw->wdt_config2=timeout_tick;
-        break;
-    case 1:
-        hw->wdt_config3=timeout_tick;
-        break;
-    case 2:
-        hw->wdt_config4=timeout_tick;
-        break;
-    case 3:
-        hw->wdt_config5=timeout_tick;
-        break;
-    default:
-        abort();
-    }
-}
-
-_Static_assert(TIMER_WDT_OFF == TIMG_WDT_STG_SEL_OFF, "Add mapping to LL watchdog timeout behavior, since it's no longer naturally compatible with the timer_wdt_behavior_t");
-_Static_assert(TIMER_WDT_INT == TIMG_WDT_STG_SEL_INT, "Add mapping to LL watchdog timeout behavior, since it's no longer naturally compatible with the timer_wdt_behavior_t");
-_Static_assert(TIMER_WDT_RESET_CPU == TIMG_WDT_STG_SEL_RESET_CPU, "Add mapping to LL watchdog timeout behavior, since it's no longer naturally compatible with the timer_wdt_behavior_t");
-_Static_assert(TIMER_WDT_RESET_SYSTEM == TIMG_WDT_STG_SEL_RESET_SYSTEM, "Add mapping to LL watchdog timeout behavior, since it's no longer naturally compatible with the timer_wdt_behavior_t");
-
-/**
- * @brief Set the WDT timeout behavior.
- *
- * @param hw Beginning address of the peripheral registers.
- * @param stage Stage number of WDT.
- * @param behavior Behavior of WDT, please see enum timer_wdt_behavior_t.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_set_timeout_behavior(timg_dev_t* hw, int stage, timer_wdt_behavior_t behavior)
-{
-    switch (stage) {
-    case 0:
-        hw->wdt_config0.stg0 = behavior;
-        break;
-    case 1:
-        hw->wdt_config0.stg1 = behavior;
-        break;
-    case 2:
-        hw->wdt_config0.stg2 = behavior;
-        break;
-    case 3:
-        hw->wdt_config0.stg3 = behavior;
-        break;
-    default:
-        abort();
-    }
-}
-
-/**
- * @brief Enable/Disable the WDT enable.
- *
- * @param hw Beginning address of the peripheral registers.
- * @param enable True to enable WDT, false to disable WDT.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_set_enable(timg_dev_t* hw, bool enable)
-{
-    hw->wdt_config0.en = enable;
-}
-
-/**
- * @brief Enable/Disable the WDT flashboot mode.
- *
- * @param hw Beginning address of the peripheral registers.
- * @param enable True to enable WDT flashboot mode, false to disable WDT flashboot mode.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_flashboot_en(timg_dev_t* hw, bool enable)
-{
-    hw->wdt_config0.flashboot_mod_en = enable;
-}
-
-/**
- * @brief Clear the WDT interrupt status.
- *
- * @param hw Beginning address of the peripheral registers.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_clear_intr_status(timg_dev_t* hw)
-{
-    hw->int_clr.wdt = 1;
-}
-
-/**
- * @brief Enable the WDT interrupt.
- *
- * @param hw Beginning address of the peripheral registers.
- */
-FORCE_INLINE_ATTR void timer_ll_wdt_enable_intr(timg_dev_t* hw)
-{
-    hw->int_ena.wdt = 1;
 }
 
 #ifdef __cplusplus

@@ -2,7 +2,7 @@
 
 * [中文版](./README_CN.md)
 
-ESP-IDF is the official development framework for the [ESP32](https://espressif.com/en/products/hardware/esp32/overview) chip.
+ESP-IDF is the official development framework for the [ESP32 and ESP32-S Series SoCs](https://www.espressif.com/en/products/hardware/soc).
 
 # Developing With ESP-IDF
 
@@ -12,8 +12,6 @@ See setup guides for detailed instructions to set up the ESP-IDF:
 
 * [Getting Started Guide for the stable ESP-IDF version](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/)
 * [Getting Started Guide for the latest (master branch) ESP-IDF version](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/)
-
-*Note: ESP-IDF Programmers Guide is in the process of transitioning to a new documentation host. Master branch ("latest") docs will not be updated from 2020-02-05 for approximately two weeks. This note will be removed once the master branch docs are updating again. Other branch & release docs continue to update as normal.*
 
 ### Non-GitHub forks
 
@@ -77,7 +75,7 @@ You don't need to run `idf.py build` before running `idf.py flash`, `idf.py flas
 
 ## Viewing Serial Output
 
-The `idf.py monitor` target uses the [idf_monitor tool](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/idf-monitor.html) to display serial output from the ESP32. idf_monitor also has a range of features to decode crash output and interact with the device. [Check the documentation page for details](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/idf-monitor.html).
+The `idf.py monitor` target uses the [idf_monitor tool](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/idf-monitor.html) to display serial output from ESP32 or ESP32-S Series SoCs. idf_monitor also has a range of features to decode crash output and interact with the device. [Check the documentation page for details](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/idf-monitor.html).
 
 Exit the monitor by typing Ctrl-].
 

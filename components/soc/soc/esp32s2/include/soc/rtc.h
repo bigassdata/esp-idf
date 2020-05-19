@@ -700,7 +700,7 @@ void rtc_sleep_set_wakeup_time(uint64_t t);
 #define RTC_GPIO_TRIG_EN    BIT(2)  //!< GPIO wakeup (light sleep only)
 #define RTC_TIMER_TRIG_EN   BIT(3)  //!< Timer wakeup
 #define RTC_SDIO_TRIG_EN    BIT(4)  //!< SDIO wakeup (light sleep only)
-#define RTC_MAC_TRIG_EN     BIT(5)  //!< MAC wakeup (light sleep only)
+#define RTC_WIFI_TRIG_EN    BIT(5)  //!< WIFI wakeup (light sleep only)
 #define RTC_UART0_TRIG_EN   BIT(6)  //!< UART0 wakeup (light sleep only)
 #define RTC_UART1_TRIG_EN   BIT(7)  //!< UART1 wakeup (light sleep only)
 #define RTC_TOUCH_TRIG_EN   BIT(8)  //!< Touch wakeup
@@ -751,6 +751,7 @@ typedef struct {
     uint32_t xtal_fpu : 1;
     uint32_t bbpll_fpu : 1;
     uint32_t cpu_waiti_clk_gate : 1;
+    uint32_t cali_ocode : 1;        //!< Calibrate Ocode to make bangap voltage more precise.
 } rtc_config_t;
 
 /**
@@ -768,7 +769,8 @@ typedef struct {
     .rtc_dboost_fpd = 1, \
     .xtal_fpu = 0, \
     .bbpll_fpu = 0, \
-    .cpu_waiti_clk_gate = 1\
+    .cpu_waiti_clk_gate = 1, \
+    .cali_ocode = 0\
 }
 
 /**

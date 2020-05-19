@@ -22,6 +22,7 @@ extern "C" {
 #include <stdbool.h>
 #include <esp_bit_defs.h>
 #include "soc/timer_group_caps.h"
+#include "esp_attr.h"
 
 /**
  * @brief Selects a Timer-Group out of 2 available groups
@@ -71,17 +72,6 @@ typedef enum {
 FLAG_ATTR(timer_intr_t)
 
 /**
- * @brief Behavior of the watchdog if a stage times out.
- */
-//this is compatible with the value of esp32.
-typedef enum {
-    TIMER_WDT_OFF = 0,          /*!< The stage is turned off*/
-    TIMER_WDT_INT = 1,          /*!< The stage will trigger an interrupt*/
-    TIMER_WDT_RESET_CPU = 2,    /*!< The stage will reset the CPU*/
-    TIMER_WDT_RESET_SYSTEM = 3, /*!< The stage will reset the whole system*/
-} timer_wdt_behavior_t;
-
-/**
  * @brief Decides whether to enable alarm mode
  */
 typedef enum {
@@ -108,7 +98,7 @@ typedef enum {
     TIMER_AUTORELOAD_MAX,
 } timer_autoreload_t;
 
-#ifdef TIMER_GROUP_SUPPORTS_XTAL_CLOCK
+#ifdef SOC_TIMER_GROUP_SUPPORT_XTAL
 /**
  * @brief Select timer source clock.
  */
@@ -128,7 +118,7 @@ typedef struct {
     timer_count_dir_t counter_dir; /*!< Counter direction  */
     timer_autoreload_t auto_reload;   /*!< Timer auto-reload */
     uint32_t divider;   /*!< Counter clock divider. The divider's range is from from 2 to 65536. */
-#ifdef TIMER_GROUP_SUPPORTS_XTAL_CLOCK
+#ifdef SOC_TIMER_GROUP_SUPPORT_XTAL
     timer_src_clk_t clk_src;  /*!< Use XTAL as source clock. */
 #endif
 } timer_config_t;

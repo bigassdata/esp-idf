@@ -1,3 +1,6 @@
+| Supported Targets | ESP32 |
+| ----------------- | ----- |
+
 # BLE peripheral example
 
 (See the README.md file in the upper level 'examples' directory for more information about examples.)
@@ -10,7 +13,7 @@ This example aims at understanding GATT database configuration, advertisement an
 
 It also demonstrates security features of NimBLE stack. SMP parameters like I/O capabilities of device, Bonding flag, MITM protection flag and Secure Connection only mode etc., can be configured through menuconfig options.
 
-For RPA feature (currently Host based privacy feature is supported), use API `ble_hs_pvcy_rpa_config` to enable/disable host based privacy. `own_addr_type` needs to be set to `BLE_ADDR_RANDOM` to use this feature.
+For RPA feature (currently Host based privacy feature is supported), use API `ble_hs_pvcy_rpa_config` to enable/disable host based privacy, `own_addr_type` needs to be set to `BLE_ADDR_RANDOM` to use this feature. Please include `ble_hs_pvcy.h` while using this API. As `ble_hs_pvcy_rpa_config` configures host privacy and sets address in controller, it is necessary to call this API after host-controller are synced (e.g. in `bleprph_on_sync` callback).
 
 To test this demo, any BLE scanner app can be used.
 
@@ -28,8 +31,6 @@ Note :
 ```
 idf.py menuconfig
 ```
-
-* Set serial port under Serial Flasher Options.
 
 * Select I/O capabilities of device from 'Example Configuration > I/O Capability', default is 'Just_works'.
 

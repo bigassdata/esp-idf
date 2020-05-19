@@ -1743,6 +1743,15 @@ int bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
         return -EINVAL;
     }
 
+    if (prov_info->static_val_len > BLE_MESH_PROV_STATIC_OOB_MAX_LEN ||
+        prov_info->output_size > BLE_MESH_PROV_OUTPUT_OOB_MAX_LEN ||
+        prov_info->input_size > BLE_MESH_PROV_INPUT_OOB_MAX_LEN) {
+        BT_ERR("%s, Invalid auth oob length", __func__);
+        return -EINVAL;
+    }
+
+    __ASSERT(prov_info->uuid, "%s, Device UUID is not initialized", __func__);
+
     /* Changed by Espressif. Use micro-ecc to generate public key now. */
     key = bt_mesh_pub_key_get();
     if (!key) {
