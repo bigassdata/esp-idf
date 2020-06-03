@@ -58,6 +58,38 @@ esp_err_t esp_ble_mesh_start_ble_advertising(const esp_ble_mesh_ble_adv_param_t 
  */
 esp_err_t esp_ble_mesh_stop_ble_advertising(uint8_t index);
 
+/**
+ * @brief         This function is called to set the callback for scan events.
+ *                It can be used to manage connections as a BLE central.
+ *
+ * @param[in]     cb: Callback function.  Depends on host.
+ *                context: Context pointer.
+ *
+ * @return        ESP_OK on success or error code otherwise.
+ *
+ */
+esp_err_t esp_ble_mesh_set_scan_callback(esp_ble_gap_event_fn cb, void* context);
+
+/**
+ * @brief         This function is called to set the callback for advertising events.
+ *                It can be used to manage connections as a BLE peripheral.
+ *
+ * @param[in]     cb: Callback function.  Depends on host.
+ *                context: Context pointer.
+ *
+ * @return        ESP_OK on success or error code otherwise.
+ *
+ */
+esp_err_t esp_ble_mesh_set_advertise_callback(esp_ble_gap_event_fn cb, void* context);
+
+/**
+ * @brief         This function is called to resume scanning after a BLE connection is handled.
+ *
+ * @return        ESP_OK on success or error code otherwise.
+ *
+ */
+esp_err_t esp_ble_mesh_resume_scan();
+
 #ifdef __cplusplus
 }
 #endif

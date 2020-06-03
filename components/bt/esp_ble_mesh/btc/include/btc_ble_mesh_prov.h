@@ -70,6 +70,9 @@ typedef enum {
     BTC_BLE_MESH_ACT_PROXY_CLIENT_REMOVE_FILTER_ADDR,
     BTC_BLE_MESH_ACT_START_BLE_ADVERTISING,
     BTC_BLE_MESH_ACT_STOP_BLE_ADVERTISING,
+    BTC_BLE_MESH_ACT_SET_BLE_ADV_CALLBACK,
+    BTC_BLE_MESH_ACT_SET_BLE_SCAN_CALLBACK,
+    BTC_BLE_MESH_BLE_RESUME_SCAN,
     BTC_BLE_MESH_ACT_DEINIT_MESH,
 } btc_ble_mesh_prov_act_t;
 
@@ -252,6 +255,10 @@ typedef union {
     struct ble_mesh_deinit_args {
         esp_ble_mesh_deinit_param_t param;
     } mesh_deinit;
+    struct ble_mesh_set_ble_callback_args {
+        void *cb;
+        void *context;
+    } mesh_set_ble_callback;
 } btc_ble_mesh_prov_args_t;
 
 typedef union {

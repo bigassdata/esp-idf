@@ -1765,6 +1765,7 @@ static void prov_data(const u8_t idx, const u8_t *data)
 
 static void send_invite(const u8_t idx)
 {
+    BT_INFO("State: Send invite");
     PROV_BUF(buf, 2);
 
     prov_buf_init(&buf, PROV_INVITE);
@@ -1904,6 +1905,7 @@ static void prov_capabilities(const u8_t idx, const u8_t *data)
 
     memcpy(&link[idx].conf_inputs[12], &buf.data[1], 5);
 
+    BT_INFO("State: Send start");
     if (prov_send(idx, &buf)) {
         BT_ERR("%s, Failed to send Provisioning Start", __func__);
         goto fail;
@@ -2122,6 +2124,7 @@ static void send_confirm(const u8_t idx)
         goto fail;
     }
 
+    BT_INFO("State: Send confirm");
     if (prov_send(idx, &buf)) {
         BT_ERR("%s, Failed to send Provisioning Confirm", __func__);
         goto fail;
@@ -2314,6 +2317,7 @@ static void send_pub_key(const u8_t idx, u8_t oob)
     /* Store provisioner public key value in conf_inputs */
     memcpy(&link[idx].conf_inputs[17], &buf.data[1], 64);
 
+    BT_INFO("State: Send public key");
     if (prov_send(idx, &buf)) {
         BT_ERR("%s, Failed to send Provisioning Public Key", __func__);
         close_link(idx, CLOSE_REASON_FAILED);
@@ -2417,6 +2421,7 @@ static void prov_confirm(const u8_t idx, const u8_t *data)
 
     net_buf_simple_add_mem(&buf, link[idx].rand, 16);
 
+    BT_INFO("State: Send random");
     if (prov_send(idx, &buf)) {
         BT_ERR("%s, Failed to send Provisioning Random", __func__);
         close_link(idx, CLOSE_REASON_FAILED);
@@ -2543,6 +2548,8 @@ static void send_prov_data(const u8_t idx)
         BT_ERR("%s, Failed to encrypt provisioning data", __func__);
         goto fail;
     }
+
+    BT_INFO("State: Send provisioning data");
 
     if (prov_send(idx, &buf)) {
         BT_ERR("%s, Failed to send Provisioning Data", __func__);

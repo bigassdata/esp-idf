@@ -1897,6 +1897,21 @@ void btc_ble_mesh_prov_call_handler(btc_msg_t *msg)
         param.stop_ble_advertising_comp.err_code =
             bt_mesh_stop_ble_advertising(arg->stop_ble_advertising.index);
         break;
+    case BTC_BLE_MESH_ACT_SET_BLE_ADV_CALLBACK:
+        act = ESP_BLE_MESH_SET_ADV_CALLBACK_COMP_EVT;
+        param.ble_set_adv_callback_comp.err_code =
+            bt_mesh_set_adv_callback(arg->mesh_set_ble_callback.cb, arg->mesh_set_ble_callback.context);
+        break;
+    case BTC_BLE_MESH_ACT_SET_BLE_SCAN_CALLBACK:
+        act = ESP_BLE_MESH_SET_SCAN_CALLBACK_COMP_EVT;
+        param.ble_set_scan_callback_comp.err_code =
+            bt_mesh_set_scan_callback(arg->mesh_set_ble_callback.cb, arg->mesh_set_ble_callback.context);
+        break;
+    case BTC_BLE_MESH_BLE_RESUME_SCAN:
+        act = ESP_BLE_MESH_RESUME_SCAN_COMP_EVT;
+        param.ble_resume_scan_comp.err_code =
+            bt_mesh_resume_scanning();
+        break;
 #endif /* CONFIG_BLE_MESH_SUPPORT_BLE_ADV */
     case BTC_BLE_MESH_ACT_DEINIT_MESH:
         act = ESP_BLE_MESH_DEINIT_MESH_COMP_EVT;

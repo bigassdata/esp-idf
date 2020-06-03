@@ -564,6 +564,7 @@ static void prov_buf_init(struct net_buf_simple *buf, u8_t type)
 
 static void prov_send_fail_msg(u8_t err)
 {
+    BT_INFO("State: Send fail");
     PROV_BUF(buf, 2);
 
     prov_buf_init(&buf, PROV_FAILED);
@@ -578,6 +579,7 @@ static void prov_send_fail_msg(u8_t err)
 
 static void prov_invite(const u8_t *data)
 {
+    BT_INFO("State: Send invite");
     PROV_BUF(buf, 12);
 
     BT_DBG("Attention Duration: %u seconds", data[0]);
@@ -829,6 +831,7 @@ static void prov_start(const u8_t *data)
 
 static void send_confirm(void)
 {
+    BT_INFO("State: Send confirm");
     PROV_BUF(cfm, 17);
 
     BT_DBG("ConfInputs[0]   %s", bt_hex(link.conf_inputs, 64));
@@ -878,6 +881,7 @@ static void send_confirm(void)
 
 static void send_input_complete(void)
 {
+    BT_INFO("State: Send input complete");
     PROV_BUF(buf, 1);
 
     prov_buf_init(&buf, PROV_INPUT_COMPLETE);
@@ -960,6 +964,7 @@ static void prov_dh_key_cb(const u8_t key[32], const u8_t idx)
 
 static void send_pub_key(void)
 {
+    BT_INFO("State: Send public key");
     PROV_BUF(buf, 65);
     const u8_t *key = NULL;
 
@@ -1110,6 +1115,7 @@ static void prov_confirm(const u8_t *data)
 
 static void prov_random(const u8_t *data)
 {
+    BT_INFO("State: Send random");
     PROV_BUF(rnd, 17);
     u8_t conf_verify[16] = {0};
 
@@ -1216,6 +1222,7 @@ static void prov_data(const u8_t *data)
     BT_DBG("net_idx %u iv_index 0x%08x, addr 0x%04x",
            net_idx, iv_index, addr);
 
+    BT_INFO("State: Send complete");
     prov_buf_init(&msg, PROV_COMPLETE);
     if (prov_send(&msg)) {
         BT_ERR("Failed to send Provisioning Complete");

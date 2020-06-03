@@ -805,6 +805,12 @@ enum {
 
 int bt_mesh_update_exceptional_list(u8_t sub_code, u8_t type, void *info);
 
+int bt_mesh_set_scan_callback(void* cb, void* context);
+
+int bt_mesh_set_adv_callback(void* cb, void* context);
+
+int bt_mesh_resume_scanning();
+
 #ifdef __cplusplus
 }
 #endif

@@ -371,6 +371,12 @@ static int svc_disced(uint16_t conn_handle, const struct ble_gatt_error *error,
 
 #endif /* (CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_PB_GATT) || CONFIG_BLE_MESH_GATT_PROXY_CLIENT */
 
+static ble_gap_event_fn *adv_callback;
+static void* adv_callback_context;
+
+static ble_gap_event_fn *scan_callback;
+static void* scan_callback_context;
+
 static int disc_cb(struct ble_gap_event *event, void *arg)
 {
     struct ble_gap_disc_desc *desc;
@@ -399,6 +405,12 @@ static int disc_cb(struct ble_gap_event *event, void *arg)
         if (bt_mesh_scan_dev_found_cb) {
             bt_mesh_scan_dev_found_cb((bt_mesh_addr_t *)&desc->addr, desc->rssi, desc->event_type, buf);
         }
+
+        if (scan_callback)
+        {
+            scan_callback(event, scan_callback_context);
+        }
+
         bt_mesh_free(buf);
         break;
 #if (CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_PB_GATT) || \
@@ -824,7 +836,7 @@ int bt_le_adv_start(const struct bt_mesh_adv_param *param,
 
 again:
     err = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER, &adv_params,
-                            gap_event_cb, NULL);
+                            adv_callback ? adv_callback : gap_event_cb, adv_callback_context);
     if (err) {
         if (err == BLE_HS_EALREADY) {
             ble_gap_adv_stop();
@@ -845,6 +857,7 @@ again:
 
     return 0;
 }
+
 
 #if CONFIG_BLE_MESH_SUPPORT_BLE_ADV
 int bt_mesh_ble_adv_start(const struct bt_mesh_ble_adv_param *param,
@@ -909,7 +922,7 @@ int bt_mesh_ble_adv_start(const struct bt_mesh_ble_adv_param *param,
     }
 
     err = ble_gap_adv_start(param->own_addr_type, &p_dir_bda, BLE_HS_FOREVER, &adv_params,
-                            gap_event_cb, NULL);
+                            adv_callback ? adv_callback : gap_event_cb, adv_callback_context);
     if (err) {
         BT_ERR("Failed to start advertising, err %d", err);
         return err;
@@ -917,6 +930,28 @@ int bt_mesh_ble_adv_start(const struct bt_mesh_ble_adv_param *param,
 
     return 0;
 }
+
+int bt_mesh_set_adv_callback(void* cb, void* context)
+{
+    adv_callback = (ble_gap_event_fn*)cb;
+    adv_callback_context = context;
+
+    return 0;
+}
+
+int bt_mesh_set_scan_callback(void* cb, void* context)
+{
+    scan_callback = (ble_gap_event_fn*)cb;
+    scan_callback_context = context;
+
+    return 0;
+}
+
+int bt_mesh_resume_scanning()
+{
+    return ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &scan_param, disc_cb, NULL);
+}
+
 #endif /* CONFIG_BLE_MESH_SUPPORT_BLE_ADV */
 
 int bt_le_adv_stop(void)

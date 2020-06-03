@@ -184,6 +184,9 @@ typedef uint8_t esp_ble_mesh_octet8_t[ESP_BLE_MESH_OCTET8_LEN];
  */
 #define ESP_BLE_MESH_GET_PUBLISH_TRANSMIT_INTERVAL(transmit)    ((((transmit) >> 3) + 1) * 50)
 
+/* Generic callback used for normal BLE operation when mesh is working. */
+typedef int esp_ble_gap_event_fn(void *event_data, void *arg);
+
 /*!< Callbacks which are not needed to be initialized by users (set with 0 and will be initialized internally) */
 typedef uint32_t esp_ble_mesh_cb_t;
 
@@ -845,6 +848,9 @@ typedef enum {
     ESP_BLE_MESH_START_BLE_ADVERTISING_COMP_EVT,                /*!< Start BLE advertising completion event */
     ESP_BLE_MESH_STOP_BLE_ADVERTISING_COMP_EVT,                 /*!< Stop BLE advertising completion event */
     ESP_BLE_MESH_DEINIT_MESH_COMP_EVT,                          /*!< De-initialize BLE Mesh stack completion event */
+    ESP_BLE_MESH_SET_ADV_CALLBACK_COMP_EVT,                     /*!< Set BLE advertising callback completion event */
+    ESP_BLE_MESH_SET_SCAN_CALLBACK_COMP_EVT,                    /*!< Set BLE scanning callback completion event */
+    ESP_BLE_MESH_RESUME_SCAN_COMP_EVT,                          /*!< Resume scanning complete event */
     ESP_BLE_MESH_PROV_EVT_MAX,
 } esp_ble_mesh_prov_cb_event_t;
 
@@ -1332,6 +1338,24 @@ typedef union {
     struct ble_mesh_deinit_mesh_comp_param {
         int err_code;                           /*!< Indicate the result of BLE Mesh deinitialization */
     } deinit_mesh_comp;                         /*!< Event parameter of ESP_BLE_MESH_DEINIT_MESH_COMP_EVT */
+    /**
+     * @brief ESP_BLE_SET_ADV_CALLBACK_COMP_EVT
+     */
+    struct ble_mesh_ble_set_adv_callback_comp_param {
+        int err_code;                           /*!< Indicate the result of callback set */
+    } ble_set_adv_callback_comp;                /*!< Event parameter of ESP_BLE_SET_ADV_CALLBACK_COMP_EVT */
+    /**
+     * @brief ESP_BLE_SET_SCAN_CALLBACK_COMP_EVT
+     */
+    struct ble_mesh_ble_set_scan_callback_comp_param {
+        int err_code;                           /*!< Indicate the result of callback set */
+    } ble_set_scan_callback_comp;               /*!< Event parameter of ESP_BLE_SET_SCAN_CALLBACK_COMP_EVT */
+    /**
+     * @brief ESP_BLE_RESUME_SCAN_COMP_EVT
+     */
+    struct ble_mesh_ble_resume_scan_comp_param {
+        int err_code;                           /*!< Indicate the result of callback set */
+    } ble_resume_scan_comp;                     /*!< Event parameter of ESP_BLE_RESUME_SCAN_COMP_EVT */
 } esp_ble_mesh_prov_cb_param_t;
 
 /**
