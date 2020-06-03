@@ -490,7 +490,6 @@ if(CONFIG_BT_ENABLED)
                     "host/nimble/nimble/nimble/host/store/ram/src/ble_store_ram.c"
                     "host/nimble/nimble/nimble/host/store/config/src/ble_store_config.c"
                     "host/nimble/nimble/nimble/host/store/config/src/ble_store_nvs.c"
-                    "host/nimble/nimble/nimble/src/ble_util.c"
                     "host/nimble/nimble/porting/npl/freertos/src/nimble_port_freertos.c"
                     "host/nimble/nimble/porting/npl/freertos/src/npl_os_freertos.c"
                     "host/nimble/nimble/porting/nimble/src/endian.c"
