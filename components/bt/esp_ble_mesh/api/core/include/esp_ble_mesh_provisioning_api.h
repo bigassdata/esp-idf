@@ -44,6 +44,14 @@ esp_err_t esp_ble_mesh_register_prov_callback(esp_ble_mesh_prov_cb_t callback);
 bool esp_ble_mesh_node_is_provisioned(void);
 
 /**
+ * @brief         Check if a device has been provisioned.
+ *
+ * @return        TRUE if the device is provisioned, FALSE if the device is unprovisioned.
+ *
+ */
+bool esp_ble_mesh_node_is_provisioner(void);
+
+/**
  * @brief         Enable specific provisioning bearers to get the device ready for provisioning.
  *
  * @note          PB-ADV: send unprovisioned device beacon.

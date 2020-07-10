@@ -35,6 +35,11 @@ bool esp_ble_mesh_node_is_provisioned(void)
     return bt_mesh_is_provisioned();
 }
 
+bool esp_ble_mesh_node_is_provisioner(void)
+{
+    return bt_mesh_is_provisioner();
+}
+
 esp_err_t esp_ble_mesh_node_prov_enable(esp_ble_mesh_prov_bearer_t bearers)
 {
     btc_ble_mesh_prov_args_t arg = {0};

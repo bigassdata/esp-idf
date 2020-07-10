@@ -1230,7 +1230,7 @@ int settings_core_load(void)
 {
     int i;
 
-    BT_DBG("%s", __func__);
+    BT_WARN("%s", __func__);
 
     for (i = 0; i < ARRAY_SIZE(settings); i++) {
         if ((!strcmp(settings[i].name, "mesh/net") ||
@@ -1239,7 +1239,7 @@ int settings_core_load(void)
             !strcmp(settings[i].name, "mesh/hb_pub") ||
             !strcmp(settings[i].name, "mesh/cfg")) &&
             (!IS_ENABLED(CONFIG_BLE_MESH_NODE) || bt_mesh_is_provisioner())) {
-            BT_DBG("Not restoring %s for Provisioner", settings[i].name);
+            BT_WARN("Not restoring %s for Provisioner", settings[i].name);
             continue;
         }
 
@@ -1250,7 +1250,7 @@ int settings_core_load(void)
             !strcmp(settings[i].name, "mesh/p_appkey") ||
             !strcmp(settings[i].name, "mesh/p_node")) &&
             (!IS_ENABLED(CONFIG_BLE_MESH_PROVISIONER) || bt_mesh_is_node())) {
-            BT_DBG("Not restoring %s for Node", settings[i].name);
+            BT_WARN("Not restoring %s for Node", settings[i].name);
             continue;
         }
 
@@ -1269,7 +1269,7 @@ int settings_core_load(void)
                 BT_INFO("Restored mesh device role: Provisioner");
                 break;
             default:
-                BT_ERR("Restored mesh device role: Unknown");
+                BT_ERR("Restored mesh device role: Unknown (%u)", role);
                 return 0;
             }
         }
