@@ -23,7 +23,8 @@
 #include "sdkconfig.h"
 #include "esp_heap_caps.h"
 #include "esp_flash_internal.h"
-#include <freertos/task.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_timer.h"
 
 static const char TAG[] = "spi_flash";
