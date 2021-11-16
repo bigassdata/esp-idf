@@ -16,7 +16,9 @@
 
 #pragma once
 #include "soc/i2c_periph.h"
+#include "soc/i2c_struct.h"
 #include "hal/i2c_types.h"
+#include "hal/hal_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,13 +73,13 @@ typedef struct {
 // Get the I2C hardware FIFO address
 #define I2C_LL_GET_FIFO_ADDR(i2c_num) (I2C_DATA_APB_REG(i2c_num))
 // I2C master TX interrupt bitmap
-#define I2C_LL_MASTER_TX_INT          (I2C_ACK_ERR_INT_ENA_M|I2C_TIME_OUT_INT_ENA_M|I2C_TRANS_COMPLETE_INT_ENA_M|I2C_ARBITRATION_LOST_INT_ENA_M|I2C_END_DETECT_INT_ENA_M)
+#define I2C_LL_MASTER_TX_INT          (I2C_NACK_INT_ENA_M|I2C_TIME_OUT_INT_ENA_M|I2C_TRANS_COMPLETE_INT_ENA_M|I2C_ARBITRATION_LOST_INT_ENA_M|I2C_END_DETECT_INT_ENA_M)
 // I2C master RX interrupt bitmap
 #define I2C_LL_MASTER_RX_INT          (I2C_TIME_OUT_INT_ENA_M|I2C_TRANS_COMPLETE_INT_ENA_M|I2C_ARBITRATION_LOST_INT_ENA_M|I2C_END_DETECT_INT_ENA_M)
 // I2C slave TX interrupt bitmap
-#define I2C_LL_SLAVE_TX_INT           (I2C_TXFIFO_EMPTY_INT_ENA_M)
+#define I2C_LL_SLAVE_TX_INT           (I2C_TXFIFO_WM_INT_ENA_M)
 // I2C slave RX interrupt bitmap
-#define I2C_LL_SLAVE_RX_INT           (I2C_RXFIFO_FULL_INT_ENA_M | I2C_TRANS_COMPLETE_INT_ENA_M)
+#define I2C_LL_SLAVE_RX_INT           (I2C_RXFIFO_WM_INT_ENA_M | I2C_TRANS_COMPLETE_INT_ENA_M)
 
 
 /**
@@ -248,7 +250,8 @@ static inline void i2c_ll_set_fifo_mode(i2c_dev_t *hw, bool fifo_mode_en)
  */
 static inline void i2c_ll_set_tout(i2c_dev_t *hw, int tout)
 {
-    hw->timeout.tout = tout;   
+    hw->timeout.tout = tout;
+    hw->timeout.time_out_en = tout > 0;
 }
 
 /**
@@ -335,7 +338,7 @@ static inline void i2c_ll_set_sda_timing(i2c_dev_t *hw, int sda_sample, int sda_
  */
 static inline void i2c_ll_set_txfifo_empty_thr(i2c_dev_t *hw, uint8_t empty_thr)
 {
-    hw->fifo_conf.tx_fifo_empty_thrhd = empty_thr;    
+    hw->fifo_conf.tx_fifo_wm_thrhd = empty_thr;
 }
 
 /**
@@ -348,7 +351,7 @@ static inline void i2c_ll_set_txfifo_empty_thr(i2c_dev_t *hw, uint8_t empty_thr)
  */
 static inline void i2c_ll_set_rxfifo_full_thr(i2c_dev_t *hw, uint8_t full_thr)
 {
-    hw->fifo_conf.rx_fifo_full_thrhd = full_thr;    
+    hw->fifo_conf.rx_fifo_wm_thrhd = full_thr;
 }
 
 /**
@@ -492,7 +495,7 @@ static inline void i2c_ll_trans_start(i2c_dev_t *hw)
 static inline void i2c_ll_get_start_timing(i2c_dev_t *hw, int *setup_time, int *hold_time)
 {
     *setup_time = hw->scl_rstart_setup.time;
-    *hold_time = hw->scl_start_hold.time+1;
+    *hold_time = hw->scl_start_hold.time + 1;
 }
 
 /**
@@ -763,11 +766,9 @@ static inline void i2c_ll_master_fsm_rst(i2c_dev_t *hw)
  */
 static inline void i2c_ll_master_clr_bus(i2c_dev_t *hw)
 {
-    uint32_t reg_val = hw->scl_sp_conf.val;
-    hw->scl_sp_conf.scl_pd_en = 1;
-    hw->scl_sp_conf.sda_pd_en = 1;
+    hw->scl_sp_conf.scl_rst_slv_num = 9;
+    hw->scl_sp_conf.scl_rst_slv_en = 0;
     hw->scl_sp_conf.scl_rst_slv_en = 1;
-    hw->scl_sp_conf.val = reg_val & 0xfe;
 }
 
 /**
@@ -796,7 +797,7 @@ static inline void i2c_ll_master_get_event(i2c_dev_t *hw, i2c_intr_event_t *even
     typeof(hw->int_status) int_sts = hw->int_status;
     if (int_sts.arbitration_lost) {
         *event = I2C_INTR_EVENT_ARBIT_LOST;
-    } else if (int_sts.ack_err) {
+    } else if (int_sts.nack) {
         *event = I2C_INTR_EVENT_NACK;
     } else if (int_sts.time_out) {
         *event = I2C_INTR_EVENT_TOUT;
@@ -820,11 +821,11 @@ static inline void i2c_ll_master_get_event(i2c_dev_t *hw, i2c_intr_event_t *even
 static inline void i2c_ll_slave_get_event(i2c_dev_t *hw, i2c_intr_event_t *event)
 {
     typeof(hw->int_status) int_sts = hw->int_status;
-    if (int_sts.tx_fifo_empty) {
+    if (int_sts.tx_fifo_wm) {
         *event = I2C_INTR_EVENT_TXFIFO_EMPTY;
     } else if (int_sts.trans_complete) {
         *event = I2C_INTR_EVENT_TRANS_DONE;
-    } else if (int_sts.rx_fifo_full) {
+    } else if (int_sts.rx_fifo_wm) {
         *event = I2C_INTR_EVENT_RXFIFO_FULL;
     } else {
         *event = I2C_INTR_EVENT_ERR;
@@ -851,6 +852,22 @@ static inline void i2c_ll_master_init(i2c_dev_t *hw)
 }
 
 /**
+ * @brief  Enable I2C internal open-drain mode
+ *         If internal open-drain of the I2C module is disabled, scl and sda gpio should be configured in open-drain mode.
+ *         Otherwise it is not needed.
+ *
+ * @param  hw Beginning address of the peripheral registers
+ * @param  internal_od_ena Set true to enble internal open-drain, otherwise, set it false.
+ *
+ * @return None
+ */
+static inline void i2c_ll_internal_od_enable(i2c_dev_t *hw, bool internal_od_ena)
+{
+    hw->ctr.sda_force_out = (internal_od_ena == false);
+    hw->ctr.scl_force_out = (internal_od_ena == false);
+}
+
+/**
  * @brief  Init I2C slave
  *
  * @param  hw Beginning address of the peripheral registers
@@ -861,12 +878,14 @@ static inline void i2c_ll_slave_init(i2c_dev_t *hw)
 {
     typeof(hw->ctr) ctrl_reg;
     ctrl_reg.val = 0;
+    //Open-drain output via GPIO
     ctrl_reg.sda_force_out = 1;
     ctrl_reg.scl_force_out = 1;
     //Disable REF tick;
     ctrl_reg.ref_always_on = 1;
     hw->ctr.val = ctrl_reg.val;
     hw->fifo_conf.fifo_addr_cfg_en = 0;
+    hw->scl_stretch_conf.slave_scl_stretch_en = 0;
 }
 
 #ifdef __cplusplus

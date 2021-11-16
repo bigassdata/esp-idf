@@ -1,5 +1,8 @@
-set(srcs "brownout_hal.c" 
+set(srcs "adc_hal.c"
+        "dac_hal.c"
+        "brownout_hal.c"
         "rtc_clk.c"
+        "regi2c_ctrl.c"
         "rtc_clk_init.c"
         "rtc_init.c"
         "rtc_pm.c"
@@ -7,6 +10,7 @@ set(srcs "brownout_hal.c"
         "rtc_time.c"
         "rtc_wdt.c"
         "soc_memory_layout.c"
+        "systimer_hal.c"
         "touch_sensor_hal.c"
         "usb_hal.c")
 

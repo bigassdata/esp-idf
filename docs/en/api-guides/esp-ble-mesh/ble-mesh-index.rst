@@ -45,7 +45,7 @@ Hardware:
 
 Software:
 
-* Example application :example:`bluetooth/esp_ble_mesh/ble_mesh_node/onoff_server` code to load to the ${IDF_TARGET_NAME} boards.
+* Example application :example:`bluetooth/esp_ble_mesh/ble_mesh_node/onoff_server` code to load to the {IDF_TARGET_NAME} boards.
 * Mobile App: **nRF Mesh** for Android or iOS. Optionally you can use some other Apps:
 
     - `EspBleMesh <https://github.com/EspressifApp/EspBLEMeshForAndroid/releases/tag/v1.0.0>`_ Android App
@@ -217,11 +217,11 @@ ESP-BLE-MESH Examples
 
 * :example_file:`ESP-BLE-MESH Provisioner <bluetooth/esp_ble_mesh/ble_mesh_provisioner/tutorial/BLE_Mesh_Provisioner_Example_Walkthrough.md>` - shows how a device can act as an ESP-BLE-MESH Provisioner to provision devices. The Provisioner has a Configuration Server model, a Configuration Client model and a Generic OnOff Client model, see :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_provisioner>`.
 
-* ESP-BLE-MESH Fast Provisioning - :example_file:`Client <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/ble_mesh_fast_prov_client/tutorial/BLE_Mesh_Fast_Prov_Client_Example_Walkthrough.md>` and :example_file:`Server <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/ble_mesh_fast_prov_server/tutorial/BLE_Mesh_Fast_Prov_Server_Example_Walkthrough.md>` - this example is used for showing how fast provisioning can be used in order to create a mesh network. It takes no more than 60 seconds to provision 100 devices, see :example:`example client code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/ble_mesh_fast_prov_client>` and :example:`example server code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/ble_mesh_fast_prov_server>`.
+* ESP-BLE-MESH Fast Provisioning - :example_file:`Client <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_client/tutorial/BLE_Mesh_Fast_Prov_Client_Example_Walkthrough.md>` and :example_file:`Server <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server/tutorial/BLE_Mesh_Fast_Prov_Server_Example_Walkthrough.md>` - this example is used for showing how fast provisioning can be used in order to create a mesh network. It takes no more than 60 seconds to provision 100 devices, see :example:`example client code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_client>` and :example:`example server code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server>`.
 
 * :example_file:`ESP-BLE-MESH and Wi-Fi Coexistence <bluetooth/esp_ble_mesh/ble_mesh_wifi_coexist/tutorial/BLE_Mesh_WiFi_Coexist_Example_Walkthrough.md>` - an example that demonstrates the Wi-Fi and Bluetooth (BLE/BR/EDR) coexistence feature of {IDF_TARGET_NAME}. Simply put, users can use the Wi-Fi while operating Bluetooth, see :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_wifi_coexist>`.
 
-* ESP-BLE-MESH Node Console - an example that implements BLE Mesh node basic features. Within this example a node can be scanned and provisioned by Provisioner and reply to get/set message from Provisioner, see :example:`example node code <bluetooth/esp_ble_mesh/ble_mesh_console/ble_mesh_node>` and :example:`example Provisioner code <bluetooth/esp_ble_mesh/ble_mesh_console/ble_mesh_provisioner>`.
+* ESP-BLE-MESH Node Console - an example that implements BLE Mesh node basic features. Within this example a node can be scanned and provisioned by Provisioner and reply to get/set message from Provisioner, see :example:`example node code <bluetooth/esp_ble_mesh/ble_mesh_console>`.
 
 
 .. _esp-ble-mesh-demo-videos:
@@ -264,12 +264,12 @@ Bluetooth SIG Documentation
 
 - `BLE Mesh Core Specification <https://www.bluetooth.org/docman/handlers/downloaddoc.ashx?doc_id=429633>`_
 - `BLE Mesh Model Specification <https://www.bluetooth.org/docman/handlers/downloaddoc.ashx?doc_id=429634>`_
-- `An Intro to Bluetooth Mesh Part 1 <http://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part1>`_ / `Part 2 <http://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part2>`__
-- `The Fundamental Concepts of Bluetooth Mesh Networking, Part 1 <http://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-1>`_ / `Part 2 <http://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-2>`__
-- `Bluetooth Mesh Networking: Friendship <http://blog.bluetooth.com/bluetooth-mesh-networking-series-friendship>`_
-- `Management of Devices in a Bluetooth Mesh Network <http://blog.bluetooth.com/management-of-devices-bluetooth-mesh-network>`_
-- `Bluetooth Mesh Security Overview <http://blog.bluetooth.com/bluetooth-mesh-security-overview>`_
-- `Provisioning a Bluetooth Mesh Network Part 1 <http://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-1>`_ / `Part 2 <http://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-2>`__
+- `An Intro to Bluetooth Mesh Part 1 <https://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part1>`_ / `Part 2 <https://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part2>`__
+- `The Fundamental Concepts of Bluetooth Mesh Networking, Part 1 <https://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-1>`_ / `Part 2 <https://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-2>`__
+- `Bluetooth Mesh Networking: Friendship <https://blog.bluetooth.com/bluetooth-mesh-networking-series-friendship>`_
+- `Management of Devices in a Bluetooth Mesh Network <https://blog.bluetooth.com/management-of-devices-bluetooth-mesh-network>`_
+- `Bluetooth Mesh Security Overview <https://blog.bluetooth.com/bluetooth-mesh-security-overview>`_
+- `Provisioning a Bluetooth Mesh Network Part 1 <https://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-1>`_ / `Part 2 <https://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-2>`__
 
 
 .. _ESP32-DevKitC: https://www.espressif.com/en/products/hardware/esp32-devkitc/overview

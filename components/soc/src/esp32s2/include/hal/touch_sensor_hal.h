@@ -63,7 +63,7 @@ extern "C" {
  *
  * @param type  Select idle channel connect to high resistance state or ground.
  */
-#define touch_hal_set_inactive_connect(type) touch_ll_set_inactive_connect(type)
+#define touch_hal_set_idle_channel_connect(type) touch_ll_set_idle_channel_connect(type)
 
 /**
  * Set connection type of touch channel in idle status.
@@ -75,7 +75,7 @@ extern "C" {
  *
  * @param type  Select idle channel connect to high resistance state or ground.
  */
-#define touch_hal_get_inactive_connect(type) touch_ll_get_inactive_connect(type)
+#define touch_hal_get_idle_channel_connect(type) touch_ll_get_idle_channel_connect(type)
 
 /**
  * Get the current measure channel. Touch sensor measurement is cyclic scan mode.
@@ -100,11 +100,60 @@ extern "C" {
 #define touch_hal_intr_disable(int_mask) touch_ll_intr_disable(int_mask)
 
 /**
+ * Clear touch sensor interrupt by bitmask.
+ *
+ * @param int_mask Pad mask to clear interrupts
+ */
+#define touch_hal_intr_clear(int_mask) touch_ll_intr_clear(int_mask)
+
+/**
  * Get the bitmask of touch sensor interrupt status.
  *
  * @return type interrupt type
  */
 #define touch_hal_read_intr_status_mask() touch_ll_read_intr_status_mask()
+
+/**
+ * Enable the timeout check for all touch sensor channels measurements.
+ * When the touch reading of a touch channel exceeds the measurement threshold,
+ * If enable: a timeout interrupt will be generated and it will go to the next channel measurement.
+ * If disable: the FSM is always on the channel, until the measurement of this channel is over.
+ *
+ * @note Set the timeout threshold correctly before enabling it.
+ */
+#define touch_hal_timeout_enable() touch_ll_timeout_enable()
+
+/**
+ * Disable the timeout check for all touch sensor channels measurements.
+ * When the touch reading of a touch channel exceeds the measurement threshold,
+ * If enable: a timeout interrupt will be generated and it will go to the next channel measurement.
+ * If disable: the FSM is always on the channel, until the measurement of this channel is over.
+ *
+ * @note Set the timeout threshold correctly before enabling it.
+ */
+#define touch_hal_timeout_disable() touch_ll_timeout_disable()
+
+/**
+ * Set timeout threshold for all touch sensor channels measurements.
+ * Compared with touch readings.
+ *
+ * @param threshold Set to the maximum time measured on one channel.
+ */
+#define touch_hal_timeout_set_threshold(threshold) touch_ll_timeout_set_threshold(threshold)
+
+/**
+ * Get timeout threshold for all touch sensor channels measurements.
+ * Compared with touch readings.
+ *
+ * @param threshold Point to timeout threshold.
+ */
+#define touch_hal_timeout_get_threshold(threshold) touch_ll_timeout_get_threshold(threshold)
+
+/**
+ * Touch timer trigger measurement and always wait measurement done.
+ * Force done for touch timer ensures that the timer always can get the measurement done signal.
+ */
+#define touch_hal_timer_force_done() touch_ll_timer_force_done()
 
 /************************ Filter register setting ************************/
 
@@ -125,34 +174,43 @@ void touch_hal_filter_set_config(const touch_filter_config_t *filter_info);
 void touch_hal_filter_get_config(touch_filter_config_t *filter_info);
 
 /**
- * Get baseline value of touch sensor.
+ * Get smoothed data that obtained by filtering the raw data.
  *
- * @note After initialization, the baseline value is the maximum during the first measurement period.
+ * @param touch_num touch pad index
+ * @param smooth_data pointer to smoothed data
+ */
+#define touch_hal_filter_read_smooth(touch_num, smooth_data) touch_ll_filter_read_smooth(touch_num, smooth_data)
+
+/**
+ * Get benchmark value of touch sensor.
+ *
+ * @note After initialization, the benchmark value is the maximum during the first measurement period.
  * @param touch_num touch pad index
  * @param touch_value pointer to accept touch sensor value
  */
-#define touch_hal_filter_read_baseline(touch_num, basedata) touch_ll_filter_read_baseline(touch_num, basedata)
+#define touch_hal_read_benchmark(touch_num, benchmark) touch_ll_read_benchmark(touch_num, benchmark)
 
 /**
- * Force reset baseline to raw data of touch sensor.
+ * Force reset benchmark to raw data of touch sensor.
  *
  * @param touch_num touch pad index
  *                  - TOUCH_PAD_MAX Reset basaline of all channels.
  */
-#define touch_hal_filter_reset_baseline(touch_num) touch_ll_filter_reset_baseline(touch_num)
+#define touch_hal_reset_benchmark(touch_num) touch_ll_reset_benchmark(touch_num)
 
 /**
- * Set filter mode. The input to the filter is raw data and the output is the baseline value.
- * Larger filter coefficients increase the stability of the baseline.
+ * Set filter mode. The input of the filter is the raw value of touch reading,
+ * and the output of the filter is involved in the judgment of the touch state.
  *
- * @param mode Filter mode type. Refer to `touch_filter_mode_t`.
+ * @param mode Filter mode type. Refer to ``touch_filter_mode_t``.
  */
 #define touch_hal_filter_set_filter_mode(mode) touch_ll_filter_set_filter_mode(mode)
 
 /**
- * Get filter mode. The input to the filter is raw data and the output is the baseline value.
+ * Get filter mode. The input of the filter is the raw value of touch reading,
+ * and the output of the filter is involved in the judgment of the touch state.
  *
- * @param mode Filter mode type. Refer to `touch_filter_mode_t`.
+ * @param mode Filter mode type. Refer to ``touch_filter_mode_t``.
  */
 #define touch_hal_filter_get_filter_mode(mode) touch_ll_filter_get_filter_mode(mode)
 
@@ -172,89 +230,47 @@ void touch_hal_filter_get_config(touch_filter_config_t *filter_info);
 #define touch_hal_filter_get_debounce(dbc_cnt) touch_ll_filter_get_debounce(dbc_cnt)
 
 /**
- * Set hysteresis threshold coefficient. hysteresis = hysteresis_thr * touch_threshold.
- * If (raw data - baseline) > (touch threshold + hysteresis), the touch channel be touched.
- * If (raw data - baseline) < (touch threshold - hysteresis), the touch channel be released.
- * Range: 0 ~ 3. The coefficient is 0: 1/8;  1: 3/32;  2: 1/16;  3: 1/32
- *
- * @param hys_thr hysteresis coefficient.
- */
-#define touch_hal_filter_set_hysteresis(hys_thr) touch_ll_filter_set_hysteresis(hys_thr)
-
-/**
- * Get hysteresis threshold coefficient. hysteresis = hysteresis_thr * touch_threshold.
- * If (raw data - baseline) > (touch threshold + hysteresis), the touch channel be touched.
- * If (raw data - baseline) < (touch threshold - hysteresis), the touch channel be released.
- * Range: 0 ~ 3. The coefficient is 0: 1/8;  1: 3/32;  2: 1/16;  3: 1/32
- *
- * @param hys_thr hysteresis coefficient.
- */
-#define touch_hal_filter_get_hysteresis(hys_thr) touch_ll_filter_get_hysteresis(hys_thr)
-
-/**
- * Set noise threshold coefficient. noise = noise_thr * touch threshold.
- * If (raw data - baseline) > (noise), the baseline stop updating.
- * If (raw data - baseline) < (noise), the baseline start updating.
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
+ * Set noise threshold coefficient. Higher = More noise resistance.
+ * The actual noise should be less than (noise coefficient * touch threshold).
+ * Range: 0 ~ 3. The coefficient is 0: 4/8;  1: 3/8;   2: 2/8;   3: 1;
  *
  * @param hys_thr Noise threshold coefficient.
  */
 #define touch_hal_filter_set_noise_thres(noise_thr) touch_ll_filter_set_noise_thres(noise_thr)
 
 /**
- * Get noise threshold coefficient. noise = noise_thr * touch threshold.
- * If (raw data - baseline) > (noise), the baseline stop updating.
- * If (raw data - baseline) < (noise), the baseline start updating.
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
+ * Get noise threshold coefficient. Higher = More noise resistance.
+ * The actual noise should be less than (noise coefficient * touch threshold).
+ * Range: 0 ~ 3. The coefficient is 0: 4/8;  1: 3/8;   2: 2/8;   3: 1;
  *
  * @param noise_thr Noise threshold coefficient.
  */
 #define touch_hal_filter_get_noise_thres(noise_thr) touch_ll_filter_get_noise_thres(noise_thr)
 
 /**
- * Set negative noise threshold coefficient. negative noise = noise_neg_thr * touch threshold.
- * If (baseline - raw data) > (negative noise), the baseline restart reset process(refer to `baseline_reset`).
- * If (baseline - raw data) < (negative noise), the baseline stop reset process(refer to `baseline_reset`).
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
- *
- * @param noise_thr Negative threshold coefficient.
- */
-#define touch_hal_filter_set_neg_noise_thres(noise_thr) touch_ll_filter_set_neg_noise_thres(noise_thr)
-
-/**
- * Get negative noise threshold coefficient. negative noise = noise_neg_thr * touch threshold.
- * If (baseline - raw data) > (negative noise), the baseline restart reset process(refer to `baseline_reset`).
- * If (baseline - raw data) < (negative noise), the baseline stop reset process(refer to `baseline_reset`).
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
- *
- * @param noise_thr Negative noise threshold coefficient.
- */
-#define touch_hal_filter_get_neg_noise_thres(noise_thr) touch_ll_filter_get_neg_noise_thres(noise_thr)
-
-/**
- * Set the cumulative number of baseline reset processes. such as `n`. If the measured values continue to exceed
- * the negative noise threshold for `n` times, the baseline reset to raw data.
+ * Set the cumulative number of benchmark reset processes. such as `n`. If the measured values continue to exceed
+ * the negative noise threshold for `n` times, the benchmark reset to raw data.
  * Range: 0 ~ 15
  *
- * @param reset_cnt The cumulative number of baseline reset processes.
+ * @param reset_cnt The cumulative number of benchmark reset processes.
  */
-#define touch_hal_filter_set_baseline_reset(reset_cnt) touch_ll_filter_set_baseline_reset(reset_cnt)
+#define touch_hal_filter_set_benchmark_reset(reset_cnt) touch_ll_filter_set_benchmark_reset(reset_cnt)
 
 /**
- * Get the cumulative number of baseline reset processes. such as `n`. If the measured values continue to exceed
- * the negative noise threshold for `n` times, the baseline reset to raw data.
+ * Get the cumulative number of benchmark reset processes. such as `n`. If the measured values continue to exceed
+ * the negative noise threshold for `n` times, the benchmark reset to raw data.
  * Range: 0 ~ 15
  *
- * @param reset_cnt The cumulative number of baseline reset processes.
+ * @param reset_cnt The cumulative number of benchmark reset processes.
  */
-#define touch_hal_filter_get_baseline_reset(reset_cnt) touch_ll_filter_get_baseline_reset(reset_cnt)
+#define touch_hal_filter_get_benchmark_reset(reset_cnt) touch_ll_filter_get_benchmark_reset(reset_cnt)
 
 /**
  * Set jitter filter step size.
  * If filter mode is jitter, should set filter step for jitter.
  * Range: 0 ~ 15
  *
- * @param step The step size of the data change when the baseline is updated.
+ * @param step The step size of the data change.
  */
 #define touch_hal_filter_set_jitter_step(step) touch_ll_filter_set_jitter_step(step)
 
@@ -263,7 +279,7 @@ void touch_hal_filter_get_config(touch_filter_config_t *filter_info);
  * If filter mode is jitter, should set filter step for jitter.
  * Range: 0 ~ 15
  *
- * @param step The step size of the data change when the baseline is updated.
+ * @param step The step size of the data change.
  */
 #define touch_hal_filter_get_jitter_step(step) touch_ll_filter_get_jitter_step(step)
 
@@ -396,11 +412,11 @@ void touch_hal_denoise_enable(void);
 
 /**
  * Set parameter of waterproof function.
- *        The waterproof function includes a shielded channel (TOUCH_PAD_NUM14) and a guard channel.
- *        The shielded channel outputs the same signal as the channel being measured.
- *        It is generally designed as a grid and is placed around the touch buttons.
- *        The shielded channel does not follow the measurement signal of the protection channel.
- *        So that the guard channel can detect a large area of water.
+ *
+ * The waterproof function includes a shielded channel (TOUCH_PAD_NUM14) and a guard channel.
+ * Guard pad is used to detect the large area of water covering the touch panel.
+ * Shield pad is used to shield the influence of water droplets covering the touch panel.
+ * It is generally designed as a grid and is placed around the touch buttons.
  *
  * @param waterproof parameter of waterproof
  */
@@ -415,41 +431,29 @@ void touch_hal_waterproof_get_config(touch_pad_waterproof_t *waterproof);
 
 /**
  * Enable parameter of waterproof function.
- * The waterproof function includes a shielded channel (TOUCH_PAD_NUM14) and a guard channel.
- * The shielded channel outputs the same signal as the channel being measured.
- * It is generally designed as a grid and is placed around the touch buttons.
- * The shielded channel does not follow the measurement signal of the protection channel.
- * So that the guard channel can detect a large area of water.
+ * Should be called after function ``touch_hal_waterproof_set_config``.
  */
 void touch_hal_waterproof_enable(void);
 
 /**
  * Disable parameter of waterproof function.
- * The waterproof function includes a shielded channel (TOUCH_PAD_NUM14) and a guard channel.
- * The shielded channel outputs the same signal as the channel being measured.
- * It is generally designed as a grid and is placed around the touch buttons.
- * The shielded channel does not follow the measurement signal of the protection channel.
- * So that the guard channel can detect a large area of water.
  */
 #define touch_hal_waterproof_disable() touch_ll_waterproof_disable()
 
 /************************ Proximity register setting ************************/
-/**
- * Set parameter of proximity channel. Three proximity sensing channels can be set.
- * The proximity sensor measurement is the accumulation of touch channel measurements.
- *
- * @note  If stop the proximity function for the channel, point this proximity channel to `TOUCH_PAD_NUM0`.
- * @param proximity parameter of proximity
- */
-void touch_hal_proximity_set_config(const touch_pad_proximity_t *proximity);
 
 /**
- * Get parameter of proximity channel. Three proximity sensing channels can be set.
+ * Enable/disable proximity function of touch channels.
  * The proximity sensor measurement is the accumulation of touch channel measurements.
  *
- * @param proximity parameter of proximity.
+ * @note Supports up to three touch channels configured as proximity sensors.
+ * @param touch_num touch pad index
+ * @param enabled true: enable the proximity function; false:  disable the proximity function
+ * @return
+ *     - true: Configured correctly.
+ *     - false: Configured error.
  */
-void touch_hal_proximity_get_config(touch_pad_proximity_t *proximity);
+bool touch_hal_enable_proximity(touch_pad_t touch_num, bool enabled);
 
 /**
  * Set touch channel number for proximity pad.
@@ -496,15 +500,27 @@ void touch_hal_proximity_get_config(touch_pad_proximity_t *proximity);
 #define touch_hal_proximity_pad_check(touch_num) touch_ll_proximity_pad_check(touch_num)
 
 /************** sleep pad setting ***********************/
+
 /**
- * Set parameter of touch sensor in sleep mode.
- *        In order to achieve low power consumption in sleep mode, other circuits except the RTC part of the register are in a power-off state.
- *        Only one touch channel is supported in the sleep state, which can be used as a wake-up function.
- *        If in non-sleep mode, the sleep parameters do not work.
+ * Get parameter of touch sensor sleep channel.
+ * The touch sensor can works in sleep mode to wake up sleep.
+ * After the sleep channel is configured, users should query the channel reading using a specific function.
  *
- * @param slp_config touch pad config.
+ * @param slp_config Point to touch sleep pad config.
  */
-void touch_hal_sleep_channel_config(const touch_pad_sleep_channel_t *slp_config);
+void touch_hal_sleep_channel_get_config(touch_pad_sleep_channel_t *slp_config);
+
+/**
+ * Set parameter of touch sensor sleep channel.
+ * The touch sensor can works in sleep mode to wake up sleep.
+ * After the sleep channel is configured, users should query the channel reading using a specific function.
+ *
+ * @note ESP32S2 only support one channel to be set sleep channel.
+ *
+ * @param pad_num touch sleep pad number.
+ * @param enable Enable/disable sleep pad function.
+ */
+void touch_hal_sleep_channel_enable(touch_pad_t pad_num, bool enable);
 
 /**
  * Set touch channel number for sleep pad.
@@ -525,7 +541,7 @@ void touch_hal_sleep_channel_config(const touch_pad_sleep_channel_t *slp_config)
 /**
  * Set the trigger threshold of touch sensor in deep sleep.
  * The threshold determines the sensitivity of the touch sensor.
- * The threshold is the original value of the trigger state minus the baseline value.
+ * The threshold is the original value of the trigger state minus the benchmark value.
  *
  * @note The threshold at sleep is the same as the threshold before sleep.
  */
@@ -534,7 +550,7 @@ void touch_hal_sleep_channel_config(const touch_pad_sleep_channel_t *slp_config)
 /**
  * Get the trigger threshold of touch sensor in deep sleep.
  * The threshold determines the sensitivity of the touch sensor.
- * The threshold is the original value of the trigger state minus the baseline value.
+ * The threshold is the original value of the trigger state minus the benchmark value.
  *
  * @note The threshold at sleep is the same as the threshold before sleep.
  */
@@ -551,11 +567,26 @@ void touch_hal_sleep_channel_config(const touch_pad_sleep_channel_t *slp_config)
 #define touch_hal_sleep_disable_approach() touch_ll_sleep_disable_approach()
 
 /**
- * Read baseline of touch sensor for sleep pad.
+ * Read benchmark of touch sensor for sleep pad.
  *
- * @param baseline Pointer to accept touch sensor baseline value.
+ * @param benchmark Pointer to accept touch sensor benchmark value.
  */
-#define touch_hal_sleep_read_baseline(baseline) touch_ll_sleep_read_baseline(baseline)
+#define touch_hal_sleep_read_benchmark(benchmark) touch_ll_sleep_read_benchmark(benchmark)
+
+/**
+ * Read smooth data of touch sensor for sleep pad.
+ */
+#define touch_hal_sleep_read_smooth(smooth_data) touch_ll_sleep_read_smooth(smooth_data)
+
+/**
+ * Read raw data of touch sensor for sleep pad.
+ */
+#define touch_hal_sleep_read_data(raw_data) touch_ll_sleep_read_data(raw_data)
+
+/**
+ * Reset benchmark of touch sensor for sleep pad.
+ */
+#define touch_hal_sleep_reset_benchmark() touch_ll_sleep_reset_benchmark()
 
 /**
  * Read debounce of touch sensor for sleep pad.

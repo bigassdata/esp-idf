@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+#include "esp_attr.h"
+
 #include "soc/cpu_caps.h"
 
 #include "xt_instr_macros.h"
@@ -27,7 +29,7 @@
 extern "C" {
 #endif
 
-static inline int cpu_ll_get_core_id(void)
+static inline int IRAM_ATTR cpu_ll_get_core_id(void)
 {
     uint32_t id;
     asm volatile (
@@ -101,7 +103,7 @@ static inline uint32_t cpu_ll_ptr_to_pc(const void* addr)
 
 static inline void* cpu_ll_pc_to_ptr(uint32_t pc)
 {
-    return (void*) ((pc & 0x3fffffff) | 0x40000000);
+    return (void*) ((pc & 0x3fffffffU) | 0x40000000U);
 }
 
 static inline void cpu_ll_set_watchpoint(int id,
@@ -114,7 +116,7 @@ static inline void cpu_ll_set_watchpoint(int id,
 
     //We support watching 2^n byte values, from 1 to 64. Calculate the mask for that.
     for (int x = 0; x < 7; x++) {
-        if (size == (1 << x)) {
+        if (size == (size_t)(1 << x)) {
             break;
         }
         dbreakc <<= 1;
@@ -164,6 +166,11 @@ static inline bool cpu_ll_is_debugger_attached(void)
 static inline void cpu_ll_break(void)
 {
     __asm__ ("break 0,0");
+}
+
+static inline void cpu_ll_set_vecbase(const void* vecbase)
+{
+    asm volatile ("wsr %0, vecbase" :: "r" (vecbase));
 }
 
 #ifdef __cplusplus

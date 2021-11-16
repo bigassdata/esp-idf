@@ -57,6 +57,7 @@ typedef enum {
     WIFI_AUTH_WPA_WPA2_PSK,     /**< authenticate mode : WPA_WPA2_PSK */
     WIFI_AUTH_WPA2_ENTERPRISE,  /**< authenticate mode : WPA2_ENTERPRISE */
     WIFI_AUTH_WPA3_PSK,         /**< authenticate mode : WPA3_PSK */
+    WIFI_AUTH_WPA2_WPA3_PSK,    /**< authenticate mode : WPA2_WPA3_PSK */
     WIFI_AUTH_MAX
 } wifi_auth_mode_t;
 
@@ -93,6 +94,7 @@ typedef enum {
     WIFI_REASON_ASSOC_FAIL               = 203,
     WIFI_REASON_HANDSHAKE_TIMEOUT        = 204,
     WIFI_REASON_CONNECTION_FAIL          = 205,
+    WIFI_REASON_AP_TSF_RESET             = 206,
 } wifi_err_reason_t;
 
 typedef enum {
@@ -114,7 +116,7 @@ typedef struct {
 } wifi_active_scan_time_t;
 
 /** @brief Aggregate of active & passive scan time per channel */
-typedef union {
+typedef struct {
     wifi_active_scan_time_t active;  /**< active scan time per channel, units: millisecond. */
     uint32_t passive;                /**< passive scan time per channel, units: millisecond, values above 1500ms may
                                           cause station to disconnect from AP and are not recommended. */
@@ -212,19 +214,19 @@ typedef struct {
 /** @brief Soft-AP configuration settings for the ESP32 */
 typedef struct {
     uint8_t ssid[32];           /**< SSID of ESP32 soft-AP. If ssid_len field is 0, this must be a Null terminated string. Otherwise, length is set according to ssid_len. */
-    uint8_t password[64];       /**< Password of ESP32 soft-AP. Null terminated string. */
+    uint8_t password[64];       /**< Password of ESP32 soft-AP. */
     uint8_t ssid_len;           /**< Optional length of SSID field. */
     uint8_t channel;            /**< Channel of ESP32 soft-AP */
     wifi_auth_mode_t authmode;  /**< Auth mode of ESP32 soft-AP. Do not support AUTH_WEP in soft-AP mode */
     uint8_t ssid_hidden;        /**< Broadcast SSID or not, default 0, broadcast the SSID */
-    uint8_t max_connection;     /**< Max number of stations allowed to connect in, default 4, max 4 */
-    uint16_t beacon_interval;   /**< Beacon interval, 100 ~ 60000 ms, default 100 ms */
+    uint8_t max_connection;     /**< Max number of stations allowed to connect in, default 4, max 10 */
+    uint16_t beacon_interval;   /**< Beacon interval which should be multiples of 100. Unit: TU(time unit, 1 TU = 1024 us). Range: 100 ~ 60000. Default value: 100 */
 } wifi_ap_config_t;
 
 /** @brief STA configuration settings for the ESP32 */
 typedef struct {
-    uint8_t ssid[32];      /**< SSID of target AP. Null terminated string. */
-    uint8_t password[64];  /**< Password of target AP. Null terminated string.*/
+    uint8_t ssid[32];      /**< SSID of target AP. */
+    uint8_t password[64];  /**< Password of target AP. */
     wifi_scan_method_t scan_method;    /**< do all channel scan or fast scan */
     bool bssid_set;        /**< whether set MAC address of target AP or not. Generally, station_config.bssid_set needs to be 0; and it needs to be 1 only when users need to check the MAC address of the AP.*/
     uint8_t bssid[6];     /**< MAC address of target AP*/
@@ -378,6 +380,7 @@ typedef enum {
 #define WIFI_PROMIS_FILTER_MASK_MISC        (1<<3)        /**< filter the packets with type of WIFI_PKT_MISC */
 #define WIFI_PROMIS_FILTER_MASK_DATA_MPDU   (1<<4)        /**< filter the MPDU which is a kind of WIFI_PKT_DATA */
 #define WIFI_PROMIS_FILTER_MASK_DATA_AMPDU  (1<<5)        /**< filter the AMPDU which is a kind of WIFI_PKT_DATA */
+#define WIFI_PROMIS_FILTER_MASK_FCSFAIL     (1<<6)        /**< filter the FCS failed packets, do not open it in general */
 
 #define WIFI_PROMIS_CTRL_FILTER_MASK_ALL         (0xFF800000)  /**< filter all control packets */
 #define WIFI_PROMIS_CTRL_FILTER_MASK_WRAPPER     (1<<23)       /**< filter the control packets with subtype of Control Wrapper */
@@ -579,6 +582,19 @@ typedef enum {
     WPS_FAIL_REASON_MAX
 } wifi_event_sta_wps_fail_reason_t;
 
+#define MAX_SSID_LEN        32
+#define MAX_PASSPHRASE_LEN  64
+#define MAX_WPS_AP_CRED     3
+
+/** Argument structure for WIFI_EVENT_STA_WPS_ER_SUCCESS event */
+typedef struct {
+    uint8_t ap_cred_cnt;                        /**< Number of AP credentials received */
+    struct {
+        uint8_t ssid[MAX_SSID_LEN];             /**< SSID of AP */
+        uint8_t passphrase[MAX_PASSPHRASE_LEN]; /**< Passphrase for the AP */
+    } ap_cred[MAX_WPS_AP_CRED];                 /**< All AP credentials received from WPS handshake */
+} wifi_event_sta_wps_er_success_t;
+
 /** Argument structure for WIFI_EVENT_AP_STACONNECTED event */
 typedef struct {
     uint8_t mac[6];           /**< MAC address of the station connected to ESP32 soft-AP */
@@ -596,6 +612,12 @@ typedef struct {
     int rssi;                 /**< Received probe request signal strength */
     uint8_t mac[6];           /**< MAC address of the station which send probe request */
 } wifi_event_ap_probe_req_rx_t;
+
+#define WIFI_STATIS_BUFFER    (1<<0)
+#define WIFI_STATIS_RXTX      (1<<1)
+#define WIFI_STATIS_HW        (1<<2)
+#define WIFI_STATIS_DIAG      (1<<3)
+#define WIFI_STATIS_ALL       (-1)
 
 #ifdef __cplusplus
 }

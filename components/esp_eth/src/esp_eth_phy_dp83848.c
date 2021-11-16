@@ -181,15 +181,23 @@ static esp_err_t dp83848_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(dp83848->reset_gpio_num);
         gpio_set_direction(dp83848->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(dp83848->reset_gpio_num, 0);
+        ets_delay_us(100); // insert min input assert time
         gpio_set_level(dp83848->reset_gpio_num, 1);
     }
     return ESP_OK;
 }
 
+/**
+ * @note This function is responsible for restarting a new auto-negotiation,
+ *       the result of negotiation won't be relected to uppler layers.
+ *       Instead, the negotiation result is fetched by linker timer, see `dp83848_get_link()`
+ */
 static esp_err_t dp83848_negotiate(esp_eth_phy_t *phy)
 {
     phy_dp83848_t *dp83848 = __containerof(phy, phy_dp83848_t, parent);
     esp_eth_mediator_t *eth = dp83848->eth;
+    /* in case any link status has changed, let's assume we're in link down status */
+    dp83848->link_status = ETH_LINK_DOWN;
     /* Start auto negotiation */
     bmcr_reg_t bmcr = {
         .speed_select = 1,     /* 100Mbps */
@@ -203,8 +211,8 @@ static esp_err_t dp83848_negotiate(esp_eth_phy_t *phy)
     bmsr_reg_t bmsr;
     physts_reg_t physts;
     uint32_t to = 0;
-    for (to = 0; to < dp83848->autonego_timeout_ms / 10; to++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+    for (to = 0; to < dp83848->autonego_timeout_ms / 100; to++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
         PHY_CHECK(eth->phy_reg_read(eth, dp83848->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
                   "read BMSR failed", err);
         PHY_CHECK(eth->phy_reg_read(eth, dp83848->addr, ETH_PHY_STS_REG_ADDR, &(physts.val)) == ESP_OK,
@@ -213,12 +221,9 @@ static esp_err_t dp83848_negotiate(esp_eth_phy_t *phy)
             break;
         }
     }
-    /* Auto negotiation failed, maybe no network cable plugged in, so output a warning */
-    if (to >= dp83848->autonego_timeout_ms / 10) {
+    if ((to >= dp83848->autonego_timeout_ms / 100) && (dp83848->link_status == ETH_LINK_UP)) {
         ESP_LOGW(TAG, "auto negotiation timeout");
     }
-    /* Updata information about link, speed, duplex */
-    PHY_CHECK(dp83848_update_link_duplex_speed(dp83848) == ESP_OK, "update link duplex speed failed", err);
     return ESP_OK;
 err:
     return ESP_FAIL;
@@ -240,12 +245,22 @@ static esp_err_t dp83848_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, dp83848->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, dp83848->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, dp83848->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < dp83848->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, dp83848->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < dp83848->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

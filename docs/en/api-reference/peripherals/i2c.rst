@@ -104,7 +104,7 @@ The following describes how a command link for a "master write" is set up and wh
 1. Create a command link with :cpp:func:`i2c_cmd_link_create`.
 
     Then, populate it with the series of data to be sent to the slave:
-    
+
    a) **Start bit** - :cpp:func:`i2c_master_start`
    b) **Slave address** - :cpp:func:`i2c_master_write_byte`. The single byte address is provided as an argument of this function call.
    c) **Data** - One or more bytes as an argument of :cpp:func:`i2c_master_write`
@@ -238,6 +238,7 @@ Delete Driver
 
 When the I2C communication is established with the function :cpp:func:`i2c_driver_install` and is not required for some substantial amount of time, the driver may be deinitialized to release allocated resources by calling :cpp:func:`i2c_driver_delete`.
 
+Before calling :cpp:func:`i2c_driver_delete` to remove i2c driver, please make sure that all threads have stopped using the driver in any way, because this function does not guarantee thread safety.
 
 Application Example
 -------------------
@@ -249,3 +250,4 @@ API Reference
 -------------
 
 .. include-build-file:: inc/i2c.inc
+.. include-build-file:: inc/i2c_types.inc

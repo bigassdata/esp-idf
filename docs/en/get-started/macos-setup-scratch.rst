@@ -1,5 +1,5 @@
 ***********************************************
-Setup Toolchain for Mac OS from Scratch
+Setup Toolchain for macOS from Scratch
 ***********************************************
 
 :link_to_translation:`zh_CN:[中文]`
@@ -31,11 +31,11 @@ Install Prerequisites
 
   - If you have HomeBrew, you can run::
 
-      brew install cmake ninja
+      brew install cmake ninja dfu-util
 
   - If you have MacPorts, you can run::
 
-      sudo port install cmake ninja
+      sudo port install cmake ninja dfu-util
 
 Compile the Toolchain from Source
 =================================
@@ -79,6 +79,10 @@ Build the toolchain::
 
 Toolchain will be built in ``~/esp/ctng-volume/crosstool-NG/builds/xtensa-{IDF_TARGET_TOOLCHAIN_NAME}-elf``. To use it, you need to add ``~/esp/ctng-volume/crosstool-NG/builds/xtensa-{IDF_TARGET_TOOLCHAIN_NAME}-elf/bin`` to ``PATH`` environment variable.
 
+Python 2 deprecation
+====================
+
+Python 2 reached its `end of life <https://www.python.org/doc/sunset-python-2/>`_ and support for it in ESP-IDF will be removed soon. Please install Python 3.6 or higher. Instructions for macOS are listed above.
 
 Next Steps
 ==========

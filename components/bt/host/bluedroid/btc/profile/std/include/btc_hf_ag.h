@@ -206,11 +206,6 @@ typedef union
 /* APP ID definition*/
 #define BTC_HF_ID_1    0
 
-#if HFP_DYNAMIC_MEMORY == TRUE
-extern hf_local_param_t *hf_local_param_ptr;
-#define hf_local_param (*hf_local_param_ptr)
-#endif
-
 /* BTC-AG control block to map bdaddr to BTA handle */
 typedef struct
 {
@@ -252,6 +247,8 @@ uint32_t btc_hf_outgoing_data_cb_to_app(uint8_t *data, uint32_t len);
 void btc_hf_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src);
 
 void btc_hf_arg_deep_free(btc_msg_t *msg);
+
+bt_status_t btc_hf_ci_sco_data(void);
 
 #endif  // BTC_HF_INCLUDED == TRUE
 

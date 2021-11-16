@@ -25,10 +25,11 @@
 #include "esp32/rom/lldesc.h"
 #include "driver/gpio.h"
 #include "driver/i2s.h"
+
 #if SOC_I2S_SUPPORTS_ADC_DAC
 #include "driver/dac.h"
 #include "hal/i2s_hal.h"
-#include "adc1_i2s_private.h"
+#include "adc1_private.h"
 #endif
 
 #include "esp_intr_alloc.h"
@@ -104,15 +105,6 @@ static int _i2s_adc_channel = -1;
 
 static i2s_dma_t *i2s_create_dma_queue(i2s_port_t i2s_num, int dma_buf_count, int dma_buf_len);
 static esp_err_t i2s_destroy_dma_queue(i2s_port_t i2s_num, i2s_dma_t *dma);
-
-static esp_err_t i2s_reset_fifo(i2s_port_t i2s_num)
-{
-    I2S_CHECK((i2s_num < I2S_NUM_MAX), "i2s_num error", ESP_ERR_INVALID_ARG);
-    I2S_ENTER_CRITICAL();
-    i2s_hal_reset_fifo(&(p_i2s_obj[i2s_num]->hal));
-    I2S_EXIT_CRITICAL();
-    return ESP_OK;
-}
 
 static inline void gpio_matrix_out_check(uint32_t gpio, uint32_t signal_idx, bool out_inv, bool oen_inv)
 {
@@ -342,19 +334,25 @@ esp_err_t i2s_set_clk(i2s_port_t i2s_num, uint32_t rate, i2s_bits_per_sample_t b
     }
 
     i2s_stop(i2s_num);
-
-    i2s_hal_set_tx_mode(&(p_i2s_obj[i2s_num]->hal), ch, bits);
+#if SOC_I2S_SUPPORTS_ADC_DAC
+    /* I2S-ADC only support single channel format. */
+    if (!(p_i2s_obj[i2s_num]->mode & I2S_MODE_ADC_BUILT_IN)) {
+        i2s_hal_set_rx_mode(&(p_i2s_obj[i2s_num]->hal), ch, bits);
+    }
+#else
     i2s_hal_set_rx_mode(&(p_i2s_obj[i2s_num]->hal), ch, bits);
+#endif
+    i2s_hal_set_tx_mode(&(p_i2s_obj[i2s_num]->hal), ch, bits);
+
     if (p_i2s_obj[i2s_num]->channel_num != ch) {
         p_i2s_obj[i2s_num]->channel_num = (ch == 2) ? 2 : 1;
     }
 
     if (bits != p_i2s_obj[i2s_num]->bits_per_sample) {
         p_i2s_obj[i2s_num]->bits_per_sample = bits;
-        p_i2s_obj[i2s_num]->bytes_per_sample = p_i2s_obj[i2s_num]->bits_per_sample / 8;
 
         // Round bytes_per_sample up to next multiple of 16 bits
-        int halfwords_per_sample = (p_i2s_obj[i2s_num]->bits_per_sample + 15) / 16;
+        int halfwords_per_sample = (bits + 15) / 16;
         p_i2s_obj[i2s_num]->bytes_per_sample = halfwords_per_sample * 2;
 
         // Because limited of DMA buffer is 4092 bytes
@@ -467,6 +465,14 @@ esp_err_t i2s_set_clk(i2s_port_t i2s_num, uint32_t rate, i2s_bits_per_sample_t b
         p_i2s_obj[i2s_num]->real_rate = real_rate;
         ESP_LOGI(I2S_TAG, "PLL_D2: Req RATE: %d, real rate: %0.3f, BITS: %u, CLKM: %u, BCK: %u, MCLK: %0.3f, SCLK: %f, diva: %d, divb: %d",
             rate, real_rate, bits, clkmInteger, bck, (double)I2S_BASE_CLK / mclk, real_rate*bits*channel, 64, clkmDecimals);
+    }
+    if (p_i2s_obj[i2s_num]->mode & I2S_MODE_TX) {
+        p_i2s_obj[i2s_num]->tx->curr_ptr = NULL;
+        p_i2s_obj[i2s_num]->tx->rw_pos = 0;
+    }
+    if (p_i2s_obj[i2s_num]->mode & I2S_MODE_RX) {
+        p_i2s_obj[i2s_num]->rx->curr_ptr = NULL;
+        p_i2s_obj[i2s_num]->rx->rw_pos = 0;
     }
 
     i2s_hal_set_tx_bits_mod(&(p_i2s_obj[i2s_num]->hal), bits);
@@ -642,9 +648,7 @@ static i2s_dma_t *i2s_create_dma_queue(i2s_port_t i2s_num, int dma_buf_count, in
     }
     dma->queue = xQueueCreate(dma_buf_count - 1, sizeof(char*));
     dma->mux = xSemaphoreCreateMutex();
-    dma->rw_pos = 0;
     dma->buf_size = dma_buf_len * sample_size;
-    dma->curr_ptr = NULL;
     ESP_LOGI(I2S_TAG, "DMA Malloc info, datalen=blocksize=%d, dma_buf_count=%d", dma_buf_len * sample_size, dma_buf_count);
     return dma;
 }
@@ -654,8 +658,6 @@ esp_err_t i2s_start(i2s_port_t i2s_num)
     I2S_CHECK((i2s_num < I2S_NUM_MAX), "i2s_num error", ESP_ERR_INVALID_ARG);
     //start DMA link
     I2S_ENTER_CRITICAL();
-    i2s_reset_fifo(i2s_num);
-
     i2s_hal_reset(&(p_i2s_obj[i2s_num]->hal));
 
     esp_intr_disable(p_i2s_obj[i2s_num]->i2s_isr_handle);
@@ -827,19 +829,30 @@ esp_err_t i2s_set_pdm_rx_down_sample(i2s_port_t i2s_num, i2s_pdm_dsr_t dsr)
 }
 #endif
 
+static esp_err_t i2s_check_cfg_static(i2s_port_t i2s_num, const i2s_config_t *cfg)
+{
+#if SOC_I2S_SUPPORTS_ADC_DAC
+    //We only check if the I2S number is invalid when set to build in ADC and DAC mode.
+    I2S_CHECK(!((cfg->mode & I2S_MODE_ADC_BUILT_IN) && (i2s_num != I2S_NUM_0)), "I2S ADC built-in only support on I2S0", ESP_ERR_INVALID_ARG);
+    I2S_CHECK(!((cfg->mode & I2S_MODE_DAC_BUILT_IN) && (i2s_num != I2S_NUM_0)), "I2S DAC built-in only support on I2S0", ESP_ERR_INVALID_ARG);
+    return ESP_OK;
+#endif
+#if SOC_I2S_SUPPORTS_PDM
+    //We only check if the I2S number is invalid when set to PDM mode.
+    I2S_CHECK(!((cfg->mode & I2S_MODE_PDM) && (i2s_num != I2S_NUM_0)), "I2S DAC PDM only support on I2S0", ESP_ERR_INVALID_ARG);
+    return ESP_OK;
+#endif
+
+    I2S_CHECK(cfg->communication_format && (cfg->communication_format < I2S_COMM_FORMAT_STAND_MAX), "invalid communication formats", ESP_ERR_INVALID_ARG);
+    I2S_CHECK(!((cfg->communication_format & I2S_COMM_FORMAT_STAND_MSB) && (cfg->communication_format & I2S_COMM_FORMAT_STAND_PCM_LONG)), "multiple communication formats specified", ESP_ERR_INVALID_ARG);
+    return ESP_OK;
+}
+
 static esp_err_t i2s_param_config(i2s_port_t i2s_num, const i2s_config_t *i2s_config)
 {
     I2S_CHECK((i2s_num < I2S_NUM_MAX), "i2s_num error", ESP_ERR_INVALID_ARG);
     I2S_CHECK((i2s_config), "param null", ESP_ERR_INVALID_ARG);
-#if SOC_I2S_SUPPORTS_ADC_DAC
-    I2S_CHECK(!((i2s_config->mode & I2S_MODE_ADC_BUILT_IN) && (i2s_num != I2S_NUM_0)), "I2S ADC built-in only support on I2S0", ESP_ERR_INVALID_ARG);
-    I2S_CHECK(!((i2s_config->mode & I2S_MODE_DAC_BUILT_IN) && (i2s_num != I2S_NUM_0)), "I2S DAC built-in only support on I2S0", ESP_ERR_INVALID_ARG);
-#endif
-    I2S_CHECK(((i2s_config->communication_format & I2S_COMM_FORMAT_I2S) || (i2s_config->communication_format & I2S_COMM_FORMAT_PCM)), "I2S communication format invalid.", ESP_ERR_INVALID_ARG);
-#if SOC_I2S_SUPPORTS_PDM
-    I2S_CHECK(!((i2s_config->mode & I2S_MODE_PDM) && (i2s_num != I2S_NUM_0)), "I2S DAC PDM only support on I2S0", ESP_ERR_INVALID_ARG);
-#endif
-    periph_module_enable(i2s_periph_signal[i2s_num].module);
+    I2S_CHECK((i2s_check_cfg_static(i2s_num, i2s_config) == ESP_OK), "param check error", ESP_ERR_INVALID_ARG);
 
 #if SOC_I2S_SUPPORTS_ADC_DAC
     if(i2s_config->mode & I2S_MODE_ADC_BUILT_IN) {
@@ -847,11 +860,10 @@ static esp_err_t i2s_param_config(i2s_port_t i2s_num, const i2s_config_t *i2s_co
         //initialize the specific ADC channel.
         //in the current stage, we only support ADC1 and single channel mode.
         //In default data mode, the ADC data is in 12-bit resolution mode.
-        adc_power_always_on();
+        adc_power_acquire();
     }
 #endif
     // configure I2S data port interface.
-    i2s_reset_fifo(i2s_num);
     i2s_hal_config_param(&(p_i2s_obj[i2s_num]->hal), i2s_config);
     if ((p_i2s_obj[i2s_num]->mode & I2S_MODE_RX) &&  (p_i2s_obj[i2s_num]->mode & I2S_MODE_TX)) {
         i2s_hal_enable_sig_loopback(&(p_i2s_obj[i2s_num]->hal));
@@ -998,6 +1010,8 @@ esp_err_t i2s_driver_uninstall(i2s_port_t i2s_num)
     }
 
     if(p_i2s_obj[i2s_num]->use_apll) {
+        // switch back to PLL clock source
+        i2s_hal_set_clock_sel(&(p_i2s_obj[i2s_num]->hal), I2S_CLK_D2CLK);
         rtc_clk_apll_enable(0, 0, 0, 0, 0);
     }
 #ifdef CONFIG_PM_ENABLE
@@ -1061,7 +1075,7 @@ esp_err_t i2s_adc_enable(i2s_port_t i2s_num)
     I2S_CHECK((p_i2s_obj[i2s_num] != NULL), "Not initialized yet", ESP_ERR_INVALID_STATE);
     I2S_CHECK((p_i2s_obj[i2s_num]->mode & I2S_MODE_ADC_BUILT_IN), "i2s built-in adc not enabled", ESP_ERR_INVALID_STATE);
 
-    adc1_i2s_mode_acquire();
+    adc1_dma_mode_acquire();
     _i2s_adc_mode_recover();
     i2s_hal_start_rx(&(p_i2s_obj[i2s_num]->hal));
     i2s_hal_reset(&(p_i2s_obj[i2s_num]->hal));

@@ -1,7 +1,7 @@
 /* Tests for FreeRTOS task suspend & resume */
 #include <stdio.h>
 #include <string.h>
-
+#include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -14,9 +14,11 @@
 
 #include "driver/timer.h"
 
+#ifndef CONFIG_FREERTOS_UNICORE
 #include "esp_ipc.h"
+#endif
 #include "esp_freertos_hooks.h"
-#include "sdkconfig.h"
+
 
 #ifdef CONFIG_IDF_TARGET_ESP32S2
 #define int_clr_timers int_clr
@@ -312,8 +314,8 @@ static void test_scheduler_suspend2(int cpu)
 
     printf("count_tick[cpu0] = %d, count_tick[cpu1] = %d\n", count_tick[0], count_tick[1]);
 
-    TEST_ASSERT_INT_WITHIN(1, waiting_ms * 2, count_tick[0]);
-    TEST_ASSERT_INT_WITHIN(1, waiting_ms * 2, count_tick[1]);
+    TEST_ASSERT_INT_WITHIN(portTICK_PERIOD_MS * 2, waiting_ms * 2, count_tick[0]);
+    TEST_ASSERT_INT_WITHIN(portTICK_PERIOD_MS * 2, waiting_ms * 2, count_tick[1]);
     printf("\n");
 }
 

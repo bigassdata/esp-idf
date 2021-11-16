@@ -122,7 +122,7 @@ void BTA_AgRegister(tBTA_SERVICE_MASK services, tBTA_SEC sec_mask,tBTA_AG_FEAT f
         p_buf->app_id = app_id;
         for (i = 0; i < BTA_AG_NUM_IDX; i++) {
             if(p_service_names[i]) {
-                BCM_STRNCPY_S(p_buf->p_name[i], BTA_SERVICE_NAME_LEN+1, p_service_names[i], BTA_SERVICE_NAME_LEN);
+                BCM_STRNCPY_S(p_buf->p_name[i], p_service_names[i], BTA_SERVICE_NAME_LEN);
                 p_buf->p_name[i][BTA_SERVICE_NAME_LEN] = 0;
             } else {
                 p_buf->p_name[i][0] = 0;
@@ -307,11 +307,13 @@ void BTA_AgSetCodec(UINT16 handle, tBTA_AG_PEER_CODEC codec)
  *                  layer will invoke esp_hf_client_outgoing_data_cb_t to fetch data
  *
  ***********************************************************************************************/
-void BTA_AgCiData(void)
+void BTA_AgCiData(UINT16 handle)
 {
     BT_HDR *p_buf;
-    if ((p_buf = (BT_HDR *) osi_malloc(sizeof(BT_HDR))) != NULL) {
+    tBTA_AG_SCB *p_scb;
+    if ((p_scb = bta_ag_scb_by_idx(handle)) != NULL && (p_buf = (BT_HDR *)osi_malloc(sizeof(BT_HDR))) != NULL) {
         p_buf->event = BTA_AG_CI_SCO_DATA_EVT;
+        p_buf->layer_specific = handle;
         bta_sys_sendmsg(p_buf);
     }
 }

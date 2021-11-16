@@ -142,6 +142,7 @@ SECTIONS
     . = 0x3C0;
     KEEP(*(.DoubleExceptionVector.text));
     . = 0x400;
+    _invalid_pc_placeholder = ABSOLUTE(.);
     *(.*Vector.literal)
 
     *(.UserEnter.literal);
@@ -160,7 +161,6 @@ SECTIONS
 
     mapping[iram0_text]
 
-    _iram_text_end = ABSOLUTE(.);
   } > iram0_0_seg
 
   .dram0.data :
@@ -249,13 +249,22 @@ SECTIONS
   ASSERT(((_bss_end - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)),
           "DRAM segment data does not fit.")
 
-  /* When modifying the alignment, update tls_section_alignment in pxPortInitialiseStack */
-  .flash.rodata : ALIGN(0x10)
+  .flash.appdesc : ALIGN(0x10)
   {
     _rodata_start = ABSOLUTE(.);
 
     *(.rodata_desc .rodata_desc.*)               /* Should be the first.  App version info.        DO NOT PUT ANYTHING BEFORE IT! */
     *(.rodata_custom_desc .rodata_custom_desc.*) /* Should be the second. Custom app version info. DO NOT PUT ANYTHING BEFORE IT! */
+
+    /* Create an empty gap within this section. Thanks to this, the end of this
+     * section will match .flah.rodata's begin address. Thus, both sections
+     * will be merged when creating the final bin image. */
+    . = ALIGN(ALIGNOF(.flash.rodata));
+  } >default_rodata_seg
+
+  .flash.rodata : ALIGN(0x10)
+  {
+    _flash_rodata_start = ABSOLUTE(.);
 
     mapping[flash_rodata]
 
@@ -276,7 +285,7 @@ SECTIONS
         Make a point of not including anything from crtbegin.o or crtend.o, as IDF doesn't use toolchain crt
       */
     __init_array_start = ABSOLUTE(.);
-    KEEP (*(EXCLUDE_FILE (*crtend.* *crtbegin.*) .ctors .ctors.*))
+    KEEP (*(EXCLUDE_FILE (*crtend.* *crtbegin.*) .ctors SORT(.ctors.*)))
     __init_array_end = ABSOLUTE(.);
     KEEP (*crtbegin.*(.dtors))
     KEEP (*(EXCLUDE_FILE (*crtend.*) .dtors))
@@ -312,6 +321,8 @@ SECTIONS
     . = ALIGN(4);
   } >default_rodata_seg
 
+  _flash_rodata_align = ALIGNOF(.flash.rodata);
+
   .flash.text :
   {
     _stext = .;
@@ -324,6 +335,14 @@ SECTIONS
     *(.fini.literal)
     *(.fini)
     *(.gnu.version)
+
+    /** CPU will try to prefetch up to 16 bytes of
+      * of instructions. This means that any configuration (e.g. MMU, PMS) must allow
+      * safe access to up to 16 bytes after the last real instruction, add
+      * dummy bytes to ensure this
+      */
+    . += 16;
+
     _text_end = ABSOLUTE(.);
     _etext = .;
 
@@ -338,8 +357,30 @@ SECTIONS
   .iram0.text_end (NOLOAD) :
   {
     . = ALIGN (4);
-    _iram_end = ABSOLUTE(.);
+    _iram_text_end = ABSOLUTE(.);
   } > iram0_0_seg
+
+  .iram0.data :
+  {
+    . = ALIGN(4);
+    _iram_data_start = ABSOLUTE(.);
+
+    mapping[iram0_data]
+
+    _iram_data_end = ABSOLUTE(.);
+  } > iram0_0_seg
+
+  .iram0.bss (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _iram_bss_start = ABSOLUTE(.);
+
+    mapping[iram0_bss]
+
+    _iram_bss_end = ABSOLUTE(.);
+    . = ALIGN(4);
+    _iram_end = ABSOLUTE(.);
+   } > iram0_0_seg
 
   /* Marks the end of data, bss and possibly rodata  */
   .dram0.heap_start (NOLOAD) :
@@ -349,7 +390,7 @@ SECTIONS
   } > dram0_0_seg
 }
 
-ASSERT(((_iram_text_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
+ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
           "IRAM0 segment data does not fit.")
 
 ASSERT(((_heap_start - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)),

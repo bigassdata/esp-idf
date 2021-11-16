@@ -20,8 +20,11 @@
 
 #pragma once
 
+#include "hal/hal_defs.h"
 #include <stdlib.h>
 #include "soc/dac_periph.h"
+#include "soc/sens_struct.h"
+#include "soc/rtc_io_struct.h"
 #include "hal/dac_types.h"
 
 #ifdef __cplusplus
@@ -69,6 +72,18 @@ static inline void dac_ll_update_output_value(dac_channel_t channel, uint8_t val
     }
 }
 
+/**
+ * Enable/disable the synchronization operation function of ADC1 and DAC.
+ *
+ * @note  If enabled(default), ADC RTC controller sampling will cause the DAC channel output voltage.
+ *
+ * @param enable Enable or disable adc and dac synchronization function.
+ */
+static inline void dac_ll_rtc_sync_by_adc(bool enable)
+{
+    SENS.sar_meas_ctrl2.sar1_dac_xpd_fsm = enable;
+}
+
 /************************************/
 /*  DAC cosine wave generator API's */
 /************************************/
@@ -112,7 +127,7 @@ static inline void dac_ll_cw_set_channel(dac_channel_t channel, bool enable)
 static inline void dac_ll_cw_set_freq(uint32_t freq)
 {
     uint32_t sw_freq = freq * 0xFFFF / RTC_FAST_CLK_FREQ_APPROX;
-    SENS.sar_dac_ctrl1.sw_fstep = (sw_freq > 0xFFFF) ? 0xFFFF : sw_freq;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl1, sw_fstep, (sw_freq > 0xFFFF) ? 0xFFFF : sw_freq);
 }
 
 /**
@@ -159,12 +174,12 @@ static inline void dac_ll_cw_set_dc_offset(dac_channel_t channel, int8_t offset)
         if (SENS.sar_dac_ctrl2.dac_inv1 == DAC_CW_PHASE_180) {
             offset = 0 - offset;
         }
-        SENS.sar_dac_ctrl2.dac_dc1 = offset ? offset : (-128 - offset);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl2, dac_dc1, offset ? offset : (-128 - offset));
     } else if (channel == DAC_CHANNEL_2) {
         if (SENS.sar_dac_ctrl2.dac_inv2 == DAC_CW_PHASE_180) {
             offset = 0 - offset;
         }
-        SENS.sar_dac_ctrl2.dac_dc2 = offset ? offset : (-128 - offset);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl2, dac_dc2, offset ? offset : (-128 - offset));
     }
 }
 
@@ -172,22 +187,14 @@ static inline void dac_ll_cw_set_dc_offset(dac_channel_t channel, int8_t offset)
 /*           DAC DMA API's          */
 /************************************/
 /**
- * Enable DAC output data from I2S DMA.
+ * Enable/disable DAC output data from I2S DMA.
  * I2S_CLK connect to DAC_CLK, I2S_DATA_OUT connect to DAC_DATA.
  */
-static inline void dac_ll_dma_enable(void)
+static inline void dac_ll_digi_enable_dma(bool enable)
 {
-    SENS.sar_dac_ctrl1.dac_dig_force = 1;
+    SENS.sar_dac_ctrl1.dac_dig_force = enable;
+    SENS.sar_dac_ctrl1.dac_clk_inv = enable;
 }
-
-/**
- * Disable DAC output data from I2S DMA.
- */
-static inline void dac_ll_dma_disable(void)
-{
-    SENS.sar_dac_ctrl1.dac_dig_force = 0;
-}
-
 
 #ifdef __cplusplus
 }

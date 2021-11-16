@@ -23,11 +23,19 @@
 #include <stdlib.h>
 #include "soc/dac_periph.h"
 #include "hal/dac_types.h"
+#include "soc/apb_saradc_struct.h"
+#include "soc/apb_saradc_reg.h"
+#include "soc/sens_struct.h"
+#include "soc/rtc_io_struct.h"
+#include "hal/hal_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/*---------------------------------------------------------------
+                    DAC common setting
+---------------------------------------------------------------*/
 /**
  * Power on dac module and start output voltage.
  *
@@ -36,6 +44,7 @@ extern "C" {
  */
 static inline void dac_ll_power_on(dac_channel_t channel)
 {
+    SENS.sar_dac_ctrl1.dac_clkgate_en = 1;
     RTCIO.pad_dac[channel].dac_xpd_force = 1;
     RTCIO.pad_dac[channel].xpd_dac = 1;
 }
@@ -49,8 +58,14 @@ static inline void dac_ll_power_down(dac_channel_t channel)
 {
     RTCIO.pad_dac[channel].dac_xpd_force = 0;
     RTCIO.pad_dac[channel].xpd_dac = 0;
+    if (RTCIO.pad_dac[0].xpd_dac == 0 && RTCIO.pad_dac[1].xpd_dac == 0) {
+        SENS.sar_dac_ctrl1.dac_clkgate_en = 0;
+    }
 }
 
+/*---------------------------------------------------------------
+                    RTC controller setting
+---------------------------------------------------------------*/
 /**
  * Output voltage with value (8 bit).
  *
@@ -67,6 +82,27 @@ static inline void dac_ll_update_output_value(dac_channel_t channel, uint8_t val
         SENS.sar_dac_ctrl2.dac_cw_en2 = 0;
         RTCIO.pad_dac[channel].dac = value;
     }
+}
+
+/**
+ * Reset dac by software.
+ */
+static inline void dac_ll_rtc_reset(void)
+{
+    SENS.sar_dac_ctrl1.dac_reset = 1;
+    SENS.sar_dac_ctrl1.dac_reset = 0;
+}
+
+/**
+ * Enable/disable the synchronization operation function of ADC1 and DAC.
+ *
+ * @note  If enabled(default), ADC RTC controller sampling will cause the DAC channel output voltage.
+ *
+ * @param enable Enable or disable adc and dac synchronization function.
+ */
+static inline void dac_ll_rtc_sync_by_adc(bool enable)
+{
+    SENS.sar_amp_ctrl3.sar1_dac_xpd_fsm = enable;
 }
 
 /************************************/
@@ -112,7 +148,7 @@ static inline void dac_ll_cw_set_channel(dac_channel_t channel, bool enable)
 static inline void dac_ll_cw_set_freq(uint32_t freq)
 {
     uint32_t sw_freq = freq * 0xFFFF / RTC_FAST_CLK_FREQ_APPROX;
-    SENS.sar_dac_ctrl1.sw_fstep = (sw_freq > 0xFFFF) ? 0xFFFF : sw_freq;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl1, sw_fstep, (sw_freq > 0xFFFF) ? 0xFFFF : sw_freq);
 }
 
 /**
@@ -159,33 +195,95 @@ static inline void dac_ll_cw_set_dc_offset(dac_channel_t channel, int8_t offset)
         if (SENS.sar_dac_ctrl2.dac_inv1 == DAC_CW_PHASE_180) {
             offset = 0 - offset;
         }
-        SENS.sar_dac_ctrl2.dac_dc1 = offset ? offset : (-128 - offset);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl2, dac_dc1, offset ? offset : (-128 - offset));
     } else if (channel == DAC_CHANNEL_2) {
         if (SENS.sar_dac_ctrl2.dac_inv2 == DAC_CW_PHASE_180) {
             offset = 0 - offset;
         }
-        SENS.sar_dac_ctrl2.dac_dc2 = offset ? offset : (-128 - offset);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(SENS.sar_dac_ctrl2, dac_dc2, offset ? offset : (-128 - offset));
     }
 }
+
+/*---------------------------------------------------------------
+                    Digital controller setting
+---------------------------------------------------------------*/
 
 /************************************/
 /*           DAC DMA API's          */
 /************************************/
+
 /**
- * Enable DAC output data from I2S DMA.
- * I2S_CLK connect to DAC_CLK, I2S_DATA_OUT connect to DAC_DATA.
+ * Enable/disable invert the DAC digital controller clock signal.
+ * 
+ * @param enable true or false.
  */
-static inline void dac_ll_dma_enable(void)
+static inline void dac_ll_digi_clk_inv(bool enable)
 {
-    SENS.sar_dac_ctrl1.dac_dig_force = 1;
+    SENS.sar_dac_ctrl1.dac_clk_inv = enable;
 }
 
 /**
- * Disable DAC output data from I2S DMA.
+ * Enable/disable DAC-DMA mode for dac digital controller.
  */
-static inline void dac_ll_dma_disable(void)
+static inline void dac_ll_digi_enable_dma(bool enable)
 {
-    SENS.sar_dac_ctrl1.dac_dig_force = 0;
+    SENS.sar_dac_ctrl1.dac_dig_force = enable;
+    APB_SARADC.apb_dac_ctrl.apb_dac_trans = enable;
+}
+
+/**
+ * Sets the number of interval clock cycles for the digital controller to trigger the DAC output.
+ * Expression: `dac_output_freq` = `controller_clk` / interval.
+ *
+ * @note The clocks of the DAC digital controller use the ADC digital controller clock divider.
+ *
+ * @param cycle The number of clock cycles for the trigger output interval. The unit is the divided clock.
+ */
+static inline void dac_ll_digi_set_trigger_interval(uint32_t cycle)
+{
+    APB_SARADC.apb_dac_ctrl.dac_timer_target = cycle;
+}
+
+/**
+ * Enable/disable DAC digital controller to trigger the DAC output.
+ *
+ * @param enable true or false.
+ */
+static inline void dac_ll_digi_trigger_output(bool enable)
+{
+    APB_SARADC.apb_dac_ctrl.dac_timer_en = enable;
+}
+
+/**
+ * Set DAC conversion mode for digital controller.
+ *
+ * @param mode Conversion mode select. See ``dac_digi_convert_mode_t``.
+ */
+static inline void dac_ll_digi_set_convert_mode(dac_digi_convert_mode_t mode)
+{
+    if (mode == DAC_CONV_NORMAL) {
+        APB_SARADC.apb_dac_ctrl.apb_dac_alter_mode = 0;
+    } else {
+        APB_SARADC.apb_dac_ctrl.apb_dac_alter_mode = 1;
+    }
+}
+
+/**
+ * Reset FIFO of DAC digital controller.
+ */
+static inline void dac_ll_digi_fifo_reset(void)
+{
+    APB_SARADC.apb_dac_ctrl.dac_reset_fifo = 1;
+    APB_SARADC.apb_dac_ctrl.dac_reset_fifo = 0;
+}
+
+/**
+ * Reset DAC digital controller.
+ */
+static inline void dac_ll_digi_reset(void)
+{
+    APB_SARADC.apb_dac_ctrl.apb_dac_rst = 1;
+    APB_SARADC.apb_dac_ctrl.apb_dac_rst = 0;
 }
 
 #ifdef __cplusplus

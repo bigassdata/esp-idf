@@ -116,6 +116,8 @@ static vfs_uart_context_t* s_ctx[UART_NUM] = {
 #endif
 };
 
+#ifdef CONFIG_VFS_SUPPORT_SELECT
+
 typedef struct {
     esp_vfs_select_sem_t select_sem;
     fd_set *readfds;
@@ -131,6 +133,8 @@ static int s_registered_select_num = 0;
 static portMUX_TYPE s_registered_select_lock = portMUX_INITIALIZER_UNLOCKED;
 
 static esp_err_t uart_end_select(void *end_select_args);
+
+#endif // CONFIG_VFS_SUPPORT_SELECT
 
 static int uart_open(const char * path, int flags, int mode)
 {
@@ -319,6 +323,8 @@ static int uart_fcntl(int fd, int cmd, int arg)
     return result;
 }
 
+#ifdef CONFIG_VFS_SUPPORT_DIR
+
 static int uart_access(const char *path, int amode)
 {
     int ret = -1;
@@ -340,6 +346,8 @@ static int uart_access(const char *path, int amode)
     return ret;
 }
 
+#endif // CONFIG_VFS_SUPPORT_DIR
+
 static int uart_fsync(int fd)
 {
     assert(fd >= 0 && fd < 3);
@@ -349,6 +357,8 @@ static int uart_fsync(int fd)
     return 0;
 }
 
+#ifdef CONFIG_VFS_SUPPORT_SELECT
+
 static esp_err_t register_select(uart_select_args_t *args)
 {
     esp_err_t ret = ESP_ERR_INVALID_ARG;
@@ -356,9 +366,11 @@ static esp_err_t register_select(uart_select_args_t *args)
     if (args) {
         portENTER_CRITICAL(&s_registered_select_lock);
         const int new_size = s_registered_select_num + 1;
-        if ((s_registered_selects = realloc(s_registered_selects, new_size * sizeof(uart_select_args_t *))) == NULL) {
+        uart_select_args_t **new_selects;
+        if ((new_selects = realloc(s_registered_selects, new_size * sizeof(uart_select_args_t *))) == NULL) {
             ret = ESP_ERR_NO_MEM;
         } else {
+            s_registered_selects = new_selects;
             s_registered_selects[s_registered_select_num] = args;
             s_registered_select_num = new_size;
             ret = ESP_OK;
@@ -382,12 +394,9 @@ static esp_err_t unregister_select(uart_select_args_t *args)
                 // last item.
                 s_registered_selects[i] = s_registered_selects[new_size];
                 s_registered_selects = realloc(s_registered_selects, new_size * sizeof(uart_select_args_t *));
-                if (s_registered_selects || new_size == 0) {
-                    s_registered_select_num = new_size;
-                    ret = ESP_OK;
-                } else {
-                    ret = ESP_ERR_NO_MEM;
-                }
+                // Shrinking a buffer with realloc is guaranteed to succeed.
+                s_registered_select_num = new_size;
+                ret = ESP_OK;
                 break;
             }
         }
@@ -508,6 +517,8 @@ static esp_err_t uart_end_select(void *end_select_args)
 
     return ret;
 }
+
+#endif // CONFIG_VFS_SUPPORT_SELECT
 
 #ifdef CONFIG_VFS_SUPPORT_TERMIOS
 static int uart_tcsetattr(int fd, int optional_actions, const struct termios *p)
@@ -972,9 +983,13 @@ void esp_vfs_dev_uart_register(void)
         .read = &uart_read,
         .fcntl = &uart_fcntl,
         .fsync = &uart_fsync,
+#ifdef CONFIG_VFS_SUPPORT_DIR
         .access = &uart_access,
+#endif // CONFIG_VFS_SUPPORT_DIR
+#ifdef CONFIG_VFS_SUPPORT_SELECT
         .start_select = &uart_start_select,
         .end_select = &uart_end_select,
+#endif // CONFIG_VFS_SUPPORT_SELECT
 #ifdef CONFIG_VFS_SUPPORT_TERMIOS
         .tcsetattr = &uart_tcsetattr,
         .tcgetattr = &uart_tcgetattr,
@@ -983,6 +998,26 @@ void esp_vfs_dev_uart_register(void)
 #endif // CONFIG_VFS_SUPPORT_TERMIOS
     };
     ESP_ERROR_CHECK(esp_vfs_register("/dev/uart", &vfs, NULL));
+}
+
+int esp_vfs_dev_uart_port_set_rx_line_endings(int uart_num, esp_line_endings_t mode)
+{
+    if (uart_num < 0 || uart_num >= UART_NUM) {
+        errno = EBADF;
+        return -1;
+    }
+    s_ctx[uart_num]->rx_mode = mode;
+    return 0;
+}
+
+int esp_vfs_dev_uart_port_set_tx_line_endings(int uart_num, esp_line_endings_t mode)
+{
+    if (uart_num < 0 || uart_num >= UART_NUM) {
+        errno = EBADF;
+        return -1;
+    }
+    s_ctx[uart_num]->tx_mode = mode;
+    return 0;
 }
 
 void esp_vfs_dev_uart_set_rx_line_endings(esp_line_endings_t mode)

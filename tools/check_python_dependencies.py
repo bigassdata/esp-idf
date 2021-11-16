@@ -41,9 +41,9 @@ if __name__ == "__main__":
 
     default_requirements_path = os.path.join(idf_path, 'requirements.txt')
 
-    parser = argparse.ArgumentParser(description='ESP32 Python package dependency checker')
+    parser = argparse.ArgumentParser(description='ESP-IDF Python package dependency checker')
     parser.add_argument('--requirements', '-r',
-                        help='Path to the requrements file',
+                        help='Path to the requirements file',
                         default=default_requirements_path)
     args = parser.parse_args()
 
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         elif sys.platform == "win32" and os.environ.get("MSYSTEM", None) == "MINGW32" and "/mingw32/bin/python" in sys.executable:
             print("The recommended way to install a packages is via \"pacman\". Please run \"pacman -Ss <package_name>\" for"
                   " searching the package database and if found then "
-                  "\"pacman -S mingw-w64-i686-python{}-<package_name>\" for installing it.".format(sys.version_info[0],))
+                  "\"pacman -S mingw-w64-i686-python-<package_name>\" for installing it.")
             print("NOTE: You may need to run \"pacman -Syu\" if your package database is older and run twice if the "
                   "previous run updated \"pacman\" itself.")
             print("Please read https://github.com/msys2/msys2/wiki/Using-packages for further information about using "
@@ -95,11 +95,19 @@ if __name__ == "__main__":
                     continue
                 elif requirement.startswith('setuptools'):
                     print("Please run the following command to install MSYS2's MINGW Python setuptools package:")
-                    print("pacman -S mingw-w64-i686-python{}-setuptools".format(sys.version_info[0],))
+                    print("pacman -S mingw-w64-i686-python-setuptools")
                     continue
         else:
             print('Please follow the instructions found in the "Set up the tools" section of '
                   'ESP-IDF Getting Started Guide')
+
+        print('Diagnostic information:')
+        idf_python_env_path = os.environ.get('IDF_PYTHON_ENV_PATH')
+        print('    IDF_PYTHON_ENV_PATH: {}'.format(idf_python_env_path or '(not set)'))
+        print('    Python interpreter used: {}'.format(sys.executable))
+        if not idf_python_env_path or idf_python_env_path not in sys.executable:
+            print('    Warning: python interpreter not running from IDF_PYTHON_ENV_PATH')
+            print('    PATH: {}'.format(os.getenv('PATH')))
         sys.exit(1)
 
     print('Python requirements from {} are satisfied.'.format(args.requirements))

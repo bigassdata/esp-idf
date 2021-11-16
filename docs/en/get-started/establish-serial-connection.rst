@@ -11,33 +11,12 @@ Connect {IDF_TARGET_NAME} to PC
 
 Connect the {IDF_TARGET_NAME} board to the PC using the USB cable. If device driver does not install automatically, identify USB to serial converter chip on your {IDF_TARGET_NAME} board (or external converter dongle), search for drivers in internet and install them.
 
-Below are the links to drivers for {IDF_TARGET_NAME} boards produced by Espressif:
-
-.. only:: esp32
-
-    .. csv-table::
-        :header: Development Board, USB Driver, Remarks
-        :widths: 40, 20, 40
-
-        :ref:`ESP32-DevKitC <esp-modules-and-boards-esp32-devkitc>`,  `CP210x`_
-        `ESP32-LyraT <https://www.espressif.com/en/products/hardware/esp32-lyrat>`_, `CP210x`_
-        `ESP32-LyraTD-MSC <https://www.espressif.com/en/products/hardware/esp32-lyratd-msc>`_, `CP210x`_
-        :ref:`ESP32-PICO-KIT <esp-modules-and-boards-esp32-pico-kit>`, `CP210x`_
-        :ref:`ESP-WROVER-KIT <esp-modules-and-boards-esp-wrover-kit>`, `FTDI`_
-        :ref:`ESP32 Demo Board <esp-modules-and-boards-esp32-demo-board>`, `FTDI`_
-        `ESP-Prog`_, `FTDI`_, Programmer board (w/o ESP32)
-        `ESP32-MeshKit-Sense <https://github.com/espressif/esp-iot-solution/blob/master/documents/evaluation_boards/ESP32-MeshKit-Sense_guide_en.md#esp32-meshkit-sense-hardware-design-guidelines>`_, n/a, Use with `ESP-Prog`_
-        `ESP32-Sense Kit <https://github.com/espressif/esp-iot-solution/blob/master/documents/evaluation_boards/esp32_sense_kit_guide_en.md#guide-for-esp32-sense-development-kit>`_, n/a, Use with `ESP-Prog`_
-
-    .. _CP210x: https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
-    .. _FTDI: http://www.ftdichip.com/Drivers/VCP.htm
-    .. _ESP-Prog: https://github.com/espressif/esp-iot-solution/blob/master/documents/evaluation_boards/ESP-Prog_guide_en.md#introduction-to-the-esp-prog-board
+Below is the list of USB to serial converter chips installed on most of the {IDF_TARGET_NAME} boards produced by Espressif together with links to the drivers:
 
 * CP210x: `CP210x USB to UART Bridge VCP Drivers <https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers>`_
-* FTDI: `FTDI Virtual COM Port Drivers <http://www.ftdichip.com/Drivers/VCP.htm>`_
+* FTDI: `FTDI Virtual COM Port Drivers <https://www.ftdichip.com/Drivers/VCP.htm>`_
 
-The drivers above are primarily for reference. Under normal circumstances, the drivers should be bundled with and operating system and automatically installed upon connecting one of the listed boards to the PC.
-
+Please check the board user guide for specific USB to serial converter chip used. The drivers above are primarily for reference. Under normal circumstances, the drivers should be bundled with an operating system and automatically installed upon connecting the board to the PC.
 
 Check port on Windows
 ---------------------
@@ -61,7 +40,7 @@ Figures below show serial port for ESP32 DevKitC and ESP32 WROVER KIT
     Two USB Serial Ports of ESP-WROVER-KIT in Windows Device Manager
 
 
-Check port on Linux and MacOS
+Check port on Linux and macOS
 -----------------------------
 
 To check the device name for the serial port of your {IDF_TARGET_NAME} board (or external converter dongle), run this command two times, first with the board / dongle unplugged, then with plugged in. The port which appears the second time is the one you need:
@@ -70,14 +49,13 @@ Linux ::
 
     ls /dev/tty*
 
-MacOS ::
+macOS ::
 
     ls /dev/cu.*
 
 .. note::
 
-    MacOS users: if you don't see the serial port then check you have the USB/serial drivers installed as shown in the Getting Started guide for your particular development board. For MacOS High Sierra (10.13), you may also have to explicitly allow the drivers to load. Open System Preferences -> Security & Privacy -> General and check if there is a message shown here about "System Software from developer ..." where the developer name is Silicon Labs or FTDI.
-
+    MacOS users: if you don't see the serial port then check you have the USB/serial drivers installed as shown in the Getting Started guide for your particular development board. For macOS High Sierra (10.13), you may also have to explicitly allow the drivers to load. Open System Preferences -> Security & Privacy -> General and check if there is a message shown here about "System Software from developer ..." where the developer name is Silicon Labs or FTDI.
 
 .. _linux-dialout-group:
 

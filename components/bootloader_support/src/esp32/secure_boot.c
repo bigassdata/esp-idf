@@ -39,11 +39,6 @@
 /* The following API implementations are used only when called
  * from the bootloader code.
  */
-/* Burn values written to the efuse write registers */
-static inline void burn_efuses(void)
-{
-    esp_efuse_burn_new_values();
-}
 
 #ifdef CONFIG_SECURE_BOOT_V1_ENABLED
 static const char *TAG = "secure_boot_v1";
@@ -140,7 +135,7 @@ esp_err_t esp_secure_boot_generate_digest(void)
         && REG_READ(EFUSE_BLK2_RDATA7_REG) == 0) {
         ESP_LOGI(TAG, "Generating new secure boot key...");
         esp_efuse_write_random_key(EFUSE_BLK2_WDATA0_REG);
-        burn_efuses();
+        esp_efuse_burn_new_values();
     } else {
         ESP_LOGW(TAG, "Using pre-loaded secure boot key in EFUSE block 2");
     }
@@ -163,6 +158,9 @@ esp_err_t esp_secure_boot_generate_digest(void)
 
 esp_err_t esp_secure_boot_permanently_enable(void)
 {
+    uint32_t new_wdata0 = 0;
+    uint32_t new_wdata6 = 0;
+
     if (esp_secure_boot_enabled()) {
         ESP_LOGI(TAG, "bootloader secure boot is already enabled, continuing..");
         return ESP_OK;
@@ -174,8 +172,7 @@ esp_err_t esp_secure_boot_permanently_enable(void)
     if (efuse_key_read_protected == false
         && efuse_key_write_protected == false) {
         ESP_LOGI(TAG, "Read & write protecting new key...");
-        REG_WRITE(EFUSE_BLK0_WDATA0_REG, EFUSE_WR_DIS_BLK2 | EFUSE_RD_DIS_BLK2);
-        burn_efuses();
+        new_wdata0 = EFUSE_WR_DIS_BLK2 | EFUSE_RD_DIS_BLK2;
         efuse_key_read_protected = true;
         efuse_key_write_protected = true;
     }
@@ -192,7 +189,7 @@ esp_err_t esp_secure_boot_permanently_enable(void)
     ESP_LOGI(TAG, "blowing secure boot efuse...");
     ESP_LOGD(TAG, "before updating, EFUSE_BLK0_RDATA6 %x", REG_READ(EFUSE_BLK0_RDATA6_REG));
 
-    uint32_t new_wdata6 = EFUSE_RD_ABS_DONE_0;
+    new_wdata6 |= EFUSE_RD_ABS_DONE_0;
 
 #ifndef CONFIG_SECURE_BOOT_ALLOW_JTAG
     ESP_LOGI(TAG, "Disable JTAG...");
@@ -208,8 +205,9 @@ esp_err_t esp_secure_boot_permanently_enable(void)
     ESP_LOGW(TAG, "Not disabling ROM BASIC fallback - SECURITY COMPROMISED");
 #endif
 
+    REG_WRITE(EFUSE_BLK0_WDATA0_REG, new_wdata0);
     REG_WRITE(EFUSE_BLK0_WDATA6_REG, new_wdata6);
-    burn_efuses();
+    esp_efuse_burn_new_values();
     uint32_t after = REG_READ(EFUSE_BLK0_RDATA6_REG);
     ESP_LOGD(TAG, "after updating, EFUSE_BLK0_RDATA6 %x", after);
     if (after & EFUSE_RD_ABS_DONE_0) {
@@ -293,6 +291,9 @@ done:
 
 esp_err_t esp_secure_boot_v2_permanently_enable(const esp_image_metadata_t *image_data)
 {
+    uint32_t new_wdata0 = 0;
+    uint32_t new_wdata6 = 0;
+
     ESP_LOGI(TAG, "enabling secure boot v2...");
     esp_err_t ret;
     if (esp_secure_boot_enabled()) {
@@ -306,7 +307,7 @@ esp_err_t esp_secure_boot_v2_permanently_enable(const esp_image_metadata_t *imag
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    /* Verify the bootloader */ 
+    /* Verify the bootloader */
     esp_image_metadata_t bootloader_data = { 0 };
     ret = esp_image_verify_bootloader_data(&bootloader_data);
     if (ret != ESP_OK) {
@@ -318,16 +319,26 @@ esp_err_t esp_secure_boot_v2_permanently_enable(const esp_image_metadata_t *imag
     uint32_t dis_reg = REG_READ(EFUSE_BLK0_RDATA0_REG);
     bool efuse_key_read_protected = dis_reg & EFUSE_RD_DIS_BLK2;
     bool efuse_key_write_protected = dis_reg & EFUSE_WR_DIS_BLK2;
-    if (efuse_key_write_protected == false 
-        && efuse_key_read_protected == false
-        && REG_READ(EFUSE_BLK2_RDATA0_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA1_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA2_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA3_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA4_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA5_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA6_REG) == 0
-        && REG_READ(EFUSE_BLK2_RDATA7_REG) == 0) {
+    uint32_t efuse_blk2_r0, efuse_blk2_r1, efuse_blk2_r2, efuse_blk2_r3, efuse_blk2_r4, efuse_blk2_r5, efuse_blk2_r6, efuse_blk2_r7;
+    efuse_blk2_r0 = REG_READ(EFUSE_BLK2_RDATA0_REG);
+    efuse_blk2_r1 = REG_READ(EFUSE_BLK2_RDATA1_REG);
+    efuse_blk2_r2 = REG_READ(EFUSE_BLK2_RDATA2_REG);
+    efuse_blk2_r3 = REG_READ(EFUSE_BLK2_RDATA3_REG);
+    efuse_blk2_r4 = REG_READ(EFUSE_BLK2_RDATA4_REG);
+    efuse_blk2_r5 = REG_READ(EFUSE_BLK2_RDATA5_REG);
+    efuse_blk2_r6 = REG_READ(EFUSE_BLK2_RDATA6_REG);
+    efuse_blk2_r7 = REG_READ(EFUSE_BLK2_RDATA7_REG);
+
+    if (efuse_key_read_protected == true) {
+        ESP_LOGE(TAG, "Secure Boot v2 digest(BLK2) read protected, aborting....");
+        return ESP_FAIL;
+    }
+
+    if (efuse_key_write_protected == false
+        && efuse_blk2_r0 == 0 && efuse_blk2_r1 == 0
+        && efuse_blk2_r2 == 0 && efuse_blk2_r3 == 0
+        && efuse_blk2_r4 == 0 && efuse_blk2_r5 == 0
+        && efuse_blk2_r6 == 0 && efuse_blk2_r7 == 0) {
         /* Verifies the signature block appended to the image matches with the signature block of the app to be loaded */
         ret = secure_boot_v2_digest_generate(bootloader_data.start_addr, bootloader_data.image_len - SIG_BLOCK_PADDING, boot_pub_key_digest);
         if (ret != ESP_OK) {
@@ -342,12 +353,24 @@ esp_err_t esp_secure_boot_v2_permanently_enable(const esp_image_metadata_t *imag
             ESP_LOGD(TAG, "EFUSE_BLKx_WDATA%d_REG = 0x%08x", i, boot_public_key_digest_ptr[i]);
         }
 
-        ESP_LOGI(TAG, "Write protecting public key digest...");
-        REG_WRITE(EFUSE_BLK0_WDATA0_REG, EFUSE_WR_DIS_BLK2);
-        efuse_key_write_protected = true;
-        efuse_key_read_protected = false;
     } else {
+        uint32_t efuse_blk2_digest[8];
+        efuse_blk2_digest[0] = efuse_blk2_r0;
+        efuse_blk2_digest[1] = efuse_blk2_r1;
+        efuse_blk2_digest[2] = efuse_blk2_r2;
+        efuse_blk2_digest[3] = efuse_blk2_r3;
+        efuse_blk2_digest[4] = efuse_blk2_r4;
+        efuse_blk2_digest[5] = efuse_blk2_r5;
+        efuse_blk2_digest[6] = efuse_blk2_r6;
+        efuse_blk2_digest[7] = efuse_blk2_r7;
+        memcpy(boot_pub_key_digest, efuse_blk2_digest, DIGEST_LEN);
         ESP_LOGW(TAG, "Using pre-loaded secure boot v2 public key digest in EFUSE block 2");
+    }
+
+    if (efuse_key_write_protected == false) {
+        ESP_LOGI(TAG, "Write protecting public key digest...");
+        new_wdata0 |= EFUSE_WR_DIS_BLK2; // delay burning until second half of this function
+        efuse_key_write_protected = true;
     }
 
     uint8_t app_pub_key_digest[DIGEST_LEN];
@@ -375,7 +398,7 @@ esp_err_t esp_secure_boot_v2_permanently_enable(const esp_image_metadata_t *imag
     ESP_LOGI(TAG, "blowing secure boot efuse...");
     ESP_LOGD(TAG, "before updating, EFUSE_BLK0_RDATA6 %x", REG_READ(EFUSE_BLK0_RDATA6_REG));
 
-    uint32_t new_wdata6 = EFUSE_RD_ABS_DONE_1;
+    new_wdata6 |= EFUSE_RD_ABS_DONE_1;
 
 #ifndef CONFIG_SECURE_BOOT_ALLOW_JTAG
     ESP_LOGI(TAG, "Disable JTAG...");
@@ -391,10 +414,27 @@ esp_err_t esp_secure_boot_v2_permanently_enable(const esp_image_metadata_t *imag
     ESP_LOGW(TAG, "Not disabling ROM BASIC fallback - SECURITY COMPROMISED");
 #endif
 
+#ifndef CONFIG_SECURE_BOOT_V2_ALLOW_EFUSE_RD_DIS
+    bool rd_dis_now = true;
+#ifdef CONFIG_SECURE_FLASH_ENC_ENABLED
+    /* If flash encryption is not enabled yet then don't read-disable efuses yet, do it later in the boot
+       when Flash Encryption is being enabled */
+    rd_dis_now = esp_flash_encryption_enabled();
+#endif
+    if (rd_dis_now) {
+        ESP_LOGI(TAG, "Prevent read disabling of additional efuses...");
+        new_wdata0 |= EFUSE_WR_DIS_RD_DIS;
+    }
+#else
+    ESP_LOGW(TAG, "Allowing read disabling of additional efuses - SECURITY COMPROMISED");
+#endif
+
+    REG_WRITE(EFUSE_BLK0_WDATA0_REG, new_wdata0);
     REG_WRITE(EFUSE_BLK0_WDATA6_REG, new_wdata6);
-    burn_efuses();
+    esp_efuse_burn_new_values();
     uint32_t after = REG_READ(EFUSE_BLK0_RDATA6_REG);
-    ESP_LOGD(TAG, "after updating, EFUSE_BLK0_RDATA6 %x", after);
+    ESP_LOGD(TAG, "after updating, EFUSE_BLK0_RDATA0 0x%08x EFUSE_BLK0_RDATA6 0x%08x",
+             REG_READ(EFUSE_BLK0_RDATA0_REG), after);
     if (after & EFUSE_RD_ABS_DONE_1) {
         ESP_LOGI(TAG, "secure boot v2 is now enabled.");
         return ESP_OK;

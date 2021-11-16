@@ -175,15 +175,23 @@ static esp_err_t rtl8201_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(rtl8201->reset_gpio_num);
         gpio_set_direction(rtl8201->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(rtl8201->reset_gpio_num, 0);
+        ets_delay_us(100); // insert min input assert time
         gpio_set_level(rtl8201->reset_gpio_num, 1);
     }
     return ESP_OK;
 }
 
+/**
+ * @note This function is responsible for restarting a new auto-negotiation,
+ *       the result of negotiation won't be relected to uppler layers.
+ *       Instead, the negotiation result is fetched by linker timer, see `rtl8201_get_link()`
+ */
 static esp_err_t rtl8201_negotiate(esp_eth_phy_t *phy)
 {
     phy_rtl8201_t *rtl8201 = __containerof(phy, phy_rtl8201_t, parent);
     esp_eth_mediator_t *eth = rtl8201->eth;
+    /* in case any link status has changed, let's assume we're in link down status */
+    rtl8201->link_status = ETH_LINK_DOWN;
     /* Restart auto negotiation */
     bmcr_reg_t bmcr = {
         .speed_select = 1,     /* 100Mbps */
@@ -196,20 +204,17 @@ static esp_err_t rtl8201_negotiate(esp_eth_phy_t *phy)
     /* Wait for auto negotiation complete */
     bmsr_reg_t bmsr;
     uint32_t to = 0;
-    for (to = 0; to < rtl8201->autonego_timeout_ms / 10; to++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+    for (to = 0; to < rtl8201->autonego_timeout_ms / 100; to++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
         PHY_CHECK(eth->phy_reg_read(eth, rtl8201->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
                   "read BMSR failed", err);
         if (bmsr.auto_nego_complete) {
             break;
         }
     }
-    /* Auto negotiation failed, maybe no network cable plugged in, so output a warning */
-    if (to >= rtl8201->autonego_timeout_ms / 10) {
+    if ((to >= rtl8201->autonego_timeout_ms / 100) && (rtl8201->link_status == ETH_LINK_UP)) {
         ESP_LOGW(TAG, "auto negotiation timeout");
     }
-    /* Updata information about link, speed, duplex */
-    PHY_CHECK(rtl8201_update_link_duplex_speed(rtl8201) == ESP_OK, "update link duplex speed failed", err);
     return ESP_OK;
 err:
     return ESP_FAIL;
@@ -231,12 +236,22 @@ static esp_err_t rtl8201_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, rtl8201->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, rtl8201->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, rtl8201->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < rtl8201->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, rtl8201->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < rtl8201->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

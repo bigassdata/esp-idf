@@ -94,6 +94,11 @@ static esp_err_t dm9051_update_link_duplex_speed(phy_dm9051_t *dm9051)
     eth_duplex_t duplex = ETH_DUPLEX_HALF;
     bmsr_reg_t bmsr;
     dscsr_reg_t dscsr;
+    // BMSR is a latch low register
+    // after power up, the first latched value must be 0, which means down
+    // to speed up power up link speed, double read this register as a workaround
+    PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
+              "read BMSR failed", err);
     PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
               "read BMSR failed", err);
     eth_link_t link = bmsr.link_status ? ETH_LINK_UP : ETH_LINK_DOWN;
@@ -187,15 +192,23 @@ static esp_err_t dm9051_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(dm9051->reset_gpio_num);
         gpio_set_direction(dm9051->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(dm9051->reset_gpio_num, 0);
+        ets_delay_us(100); // insert min input assert time
         gpio_set_level(dm9051->reset_gpio_num, 1);
     }
     return ESP_OK;
 }
 
+/**
+ * @note This function is responsible for restarting a new auto-negotiation,
+ *       the result of negotiation won't be relected to uppler layers.
+ *       Instead, the negotiation result is fetched by linker timer, see `dm9051_get_link()`
+ */
 static esp_err_t dm9051_negotiate(esp_eth_phy_t *phy)
 {
     phy_dm9051_t *dm9051 = __containerof(phy, phy_dm9051_t, parent);
     esp_eth_mediator_t *eth = dm9051->eth;
+    /* in case any link status has changed, let's assume we're in link down status */
+    dm9051->link_status = ETH_LINK_DOWN;
     /* Start auto negotiation */
     bmcr_reg_t bmcr = {
         .speed_select = 1,     /* 100Mbps */
@@ -209,8 +222,8 @@ static esp_err_t dm9051_negotiate(esp_eth_phy_t *phy)
     bmsr_reg_t bmsr;
     dscsr_reg_t dscsr;
     uint32_t to = 0;
-    for (to = 0; to < dm9051->autonego_timeout_ms / 10; to++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+    for (to = 0; to < dm9051->autonego_timeout_ms / 100; to++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
         PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
                   "read BMSR failed", err);
         PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_DSCSR_REG_ADDR, &(dscsr.val)) == ESP_OK,
@@ -219,11 +232,9 @@ static esp_err_t dm9051_negotiate(esp_eth_phy_t *phy)
             break;
         }
     }
-    if (to >= dm9051->autonego_timeout_ms / 10) {
+    if ((to >= dm9051->autonego_timeout_ms / 100) && (dm9051->link_status == ETH_LINK_UP)) {
         ESP_LOGW(TAG, "Ethernet PHY auto negotiation timeout");
     }
-    /* Updata information about link, speed, duplex */
-    PHY_CHECK(dm9051_update_link_duplex_speed(dm9051) == ESP_OK, "update link duplex speed failed", err);
     return ESP_OK;
 err:
     return ESP_FAIL;
@@ -245,12 +256,22 @@ static esp_err_t dm9051_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, dm9051->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < dm9051->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < dm9051->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

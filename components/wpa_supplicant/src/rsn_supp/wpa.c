@@ -48,6 +48,7 @@
 #define WPA_TX_MSG_BUFF_MAXLEN 200
 
 #define ASSOC_IE_LEN 24 + 2 + PMKID_LEN + RSN_SELECTOR_LEN
+#define MAX_EAPOL_RETRIES 3
 u8 assoc_ie_buf[ASSOC_IE_LEN+2]; 
 
 void set_assoc_ie(u8 * assoc_buf);
@@ -63,6 +64,7 @@ int wpa_sm_get_key(uint8_t *ifx, int *alg, u8 *addr, int *key_idx, u8 *key, size
 void wpa_set_passphrase(char * passphrase, u8 *ssid, size_t ssid_len);
 
 void wpa_sm_set_pmk_from_pmksa(struct wpa_sm *sm);
+static bool wpa_supplicant_gtk_in_use(struct wpa_sm *sm, struct wpa_gtk_data *gd);
 static inline enum wpa_states   wpa_sm_get_state(struct wpa_sm *sm)
 {
     return sm->wpa_state;;
@@ -134,6 +136,20 @@ uint32_t cipher_type_map_public_to_supp(wifi_cipher_type_t cipher)
     default:
         return WPA_CIPHER_NONE;
     }
+}
+
+static bool is_wpa2_enterprise_connection(void)
+{
+    uint8_t authmode;
+
+    if (esp_wifi_sta_prof_is_wpa2_internal()) {
+        authmode = esp_wifi_sta_get_prof_authmode_internal();
+        if ((authmode == WPA2_AUTH_ENT) || (authmode == WPA2_AUTH_ENT_SHA256)) {
+            return true;
+	}
+    }
+
+    return false;
 }
 
 /**
@@ -587,8 +603,7 @@ void   wpa_supplicant_process_1_of_4(struct wpa_sm *sm,
     if (res)
         goto failed;
 
-    if (esp_wifi_sta_prof_is_wpa2_internal() &&
-        esp_wifi_sta_get_prof_authmode_internal() == WPA2_AUTH_ENT) {
+    if (is_wpa2_enterprise_connection()) {
         pmksa_cache_set_current(sm, NULL, sm->bssid, 0, 0);
     }
 
@@ -792,11 +807,19 @@ int   wpa_supplicant_install_gtk(struct wpa_sm *sm,
        
     wpa_hexdump(MSG_DEBUG, "WPA: Group Key", gd->gtk, gd->gtk_len);
 
-    #ifdef DEBUG_PRINT    
+    /* Detect possible key reinstallation */
+    if (wpa_supplicant_gtk_in_use(sm, &(sm->gd))) {
+            wpa_printf(MSG_DEBUG,
+                    "WPA: Not reinstalling already in-use GTK to the driver (keyidx=%d tx=%d len=%d)",
+                    gd->keyidx, gd->tx, gd->gtk_len);
+            return 0;
+    }
+    #ifdef DEBUG_PRINT
     wpa_printf(MSG_DEBUG, "WPA: Installing GTK to the driver "
            "(keyidx=%d tx=%d len=%d).\n", gd->keyidx, gd->tx,
            gd->gtk_len);
-    #endif    
+    #endif
+
     wpa_hexdump(MSG_DEBUG, "WPA: RSC", key_rsc, gd->key_rsc_len);
     if (sm->group_cipher == WPA_CIPHER_TKIP) {
         /* Swap Tx/Rx keys for Michael MIC */
@@ -833,7 +856,7 @@ int   wpa_supplicant_install_gtk(struct wpa_sm *sm,
     return 0;
 }
 
-bool wpa_supplicant_gtk_in_use(struct wpa_sm *sm, struct wpa_gtk_data *gd)
+static bool wpa_supplicant_gtk_in_use(struct wpa_sm *sm, struct wpa_gtk_data *gd)
 {
     u8 *_gtk = gd->gtk;
     u8 gtk_buf[32];
@@ -842,8 +865,6 @@ bool wpa_supplicant_gtk_in_use(struct wpa_sm *sm, struct wpa_gtk_data *gd)
     int alg;
     u8 bssid[6];
     int keyidx;
-
-    wpa_hexdump(MSG_DEBUG, "WPA: Group Key", gd->gtk, gd->gtk_len);
 
     #ifdef DEBUG_PRINT
     wpa_printf(MSG_DEBUG, "WPA: Judge GTK: (keyidx=%d len=%d).", gd->keyidx, gd->gtk_len);
@@ -857,19 +878,10 @@ bool wpa_supplicant_gtk_in_use(struct wpa_sm *sm, struct wpa_gtk_data *gd)
         _gtk = gtk_buf;
     }
 
-    //check if gtk is in use.
-    if (wpa_sm_get_key(&ifx, &alg, bssid, &keyidx, gtk_get, gd->gtk_len, gd->keyidx) == 0) {
+    if (wpa_sm_get_key(&ifx, &alg, bssid, &keyidx, gtk_get, gd->gtk_len, gd->keyidx - 2) == 0) {
         if (ifx == 0 && alg == gd->alg && memcmp(bssid, sm->bssid, ETH_ALEN) == 0 &&
         		memcmp(_gtk, gtk_get, gd->gtk_len) == 0) {
-            wpa_printf(MSG_DEBUG, "GTK %d is already in use in entry %d, it may be an attack, ignor it.", gd->keyidx, gd->keyidx + 2);
-            return true;
-        }
-    }
-
-    if (wpa_sm_get_key(&ifx, &alg, bssid, &keyidx, gtk_get, gd->gtk_len, (gd->keyidx+1)%2) == 0) {
-    	if (ifx == 0 && alg == gd->alg && memcmp(bssid, sm->bssid, ETH_ALEN) == 0 &&
-    			memcmp(_gtk, gtk_get, gd->gtk_len) == 0) {
-            wpa_printf(MSG_DEBUG, "GTK %d is already in use in entry %d, it may be an attack, ignor it.", gd->keyidx, (gd->keyidx+1)%2 + 2);
+            wpa_printf(MSG_DEBUG, "GTK %d is already in use in entry, it may be an attack, ignore it.", gd->keyidx);
             return true;
         }
     }
@@ -1008,7 +1020,7 @@ int   ieee80211w_set_keys(struct wpa_sm *sm,
 		if (keyidx > 4095) {
 			return -1;
 		}
-		return esp_wifi_set_igtk_internal(ESP_IF_WIFI_STA, igtk);
+		return esp_wifi_set_igtk_internal(WIFI_IF_STA, igtk);
 	}
 	return 0;
 #else
@@ -1548,10 +1560,8 @@ failed:
     u16 rekey= (WPA_SM_STATE(sm) == WPA_COMPLETED);
 
     if((sm->gd).gtk_len) {
-    	if (wpa_supplicant_gtk_in_use(sm, &(sm->gd)) == false) {
-            if (wpa_supplicant_install_gtk(sm, &(sm->gd)))
-                goto failed;
-    	}
+        if (wpa_supplicant_install_gtk(sm, &(sm->gd)))
+            goto failed;
     } else {
         goto failed;
     }
@@ -1938,6 +1948,14 @@ int   wpa_sm_rx_eapol(u8 *src_addr, u8 *buf, u32 len)
             wpa_supplicant_process_3_of_4(sm, key, ver);
         } else {
             /* 1/4 4-Way Handshake */
+            sm->eapol1_count++;
+            if (sm->eapol1_count > MAX_EAPOL_RETRIES) {
+#ifdef DEBUG_PRINT
+                wpa_printf(MSG_INFO, "EAPOL1 received for %d times, sending deauth", sm->eapol1_count);
+#endif
+                esp_wifi_internal_issue_disconnect(WLAN_REASON_4WAY_HANDSHAKE_TIMEOUT);
+                goto out;
+            }
             wpa_supplicant_process_1_of_4(sm, src_addr, key,
                               ver);
         }
@@ -2078,6 +2096,8 @@ void wpa_set_profile(u32 wpa_proto, u8 auth_mode)
     sm->proto = wpa_proto;
     if (auth_mode == WPA2_AUTH_ENT) {
         sm->key_mgmt = WPA_KEY_MGMT_IEEE8021X; /* for wpa2 enterprise */
+    } else if (auth_mode == WPA2_AUTH_ENT_SHA256) {
+        sm->key_mgmt = WPA_KEY_MGMT_IEEE8021X_SHA256; /* for wpa2 enterprise sha256 */
     } else if (auth_mode == WPA2_AUTH_PSK_SHA256) {
         sm->key_mgmt = WPA_KEY_MGMT_PSK_SHA256;
     } else if (auth_mode == WPA3_AUTH_PSK) {
@@ -2117,19 +2137,33 @@ int wpa_set_bss(char *macddr, char * bssid, u8 pairwise_cipher, u8 group_cipher,
     sm->ap_notify_completed_rsne = esp_wifi_sta_is_ap_notify_completed_rsne_internal();
 
     if (sm->key_mgmt == WPA_KEY_MGMT_SAE ||
-        (esp_wifi_sta_prof_is_wpa2_internal() &&
-         esp_wifi_sta_get_prof_authmode_internal() == WPA2_AUTH_ENT)) {
-        pmksa_cache_set_current(sm, NULL, (const u8*) bssid, 0, 0);
-        wpa_sm_set_pmk_from_pmksa(sm);
+	    is_wpa2_enterprise_connection()) {
+        if (!esp_wifi_skip_supp_pmkcaching()) {
+            pmksa_cache_set_current(sm, NULL, (const u8*) bssid, 0, 0);
+            wpa_sm_set_pmk_from_pmksa(sm);
+        } else {
+            struct rsn_pmksa_cache_entry *entry = NULL;
+
+            if (sm->pmksa) {
+                entry = pmksa_cache_get(sm->pmksa, (const u8 *)bssid, NULL, NULL);
+            }
+            if (entry) {
+                pmksa_cache_flush(sm->pmksa, NULL, entry->pmk, entry->pmk_len);
+            }
+        }
     }
 
+    sm->eapol1_count = 0;
 #ifdef CONFIG_IEEE80211W
     if (esp_wifi_sta_pmf_enabled()) {
         wifi_config_t wifi_cfg;
 
-        esp_wifi_get_config(ESP_IF_WIFI_STA, &wifi_cfg);
+        esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg);
         sm->pmf_cfg = wifi_cfg.sta.pmf_cfg;
         sm->mgmt_group_cipher = cipher_type_map_public_to_supp(esp_wifi_sta_get_mgmt_group_cipher());
+    } else {
+        memset(&sm->pmf_cfg, 0, sizeof(sm->pmf_cfg));
+        sm->mgmt_group_cipher = WPA_CIPHER_NONE;
     }
 #endif
     set_assoc_ie(assoc_ie_buf); /* use static buffer */
@@ -2360,6 +2394,15 @@ bool wpa_sta_in_4way_handshake(void)
 bool wpa_sta_is_cur_pmksa_set(void) {
     struct wpa_sm *sm = &gWpaSm;
     return (pmksa_cache_get_current(sm) != NULL);
+}
+
+bool wpa_sta_cur_pmksa_matches_akm(void) {
+    struct wpa_sm *sm = &gWpaSm;
+    struct rsn_pmksa_cache_entry *pmksa;
+
+    pmksa = pmksa_cache_get_current(sm);
+    return (pmksa != NULL  &&
+            sm->key_mgmt == pmksa->akmp);
 }
 
 void wpa_sta_clear_curr_pmksa(void) {

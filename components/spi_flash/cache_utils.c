@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdlib.h>
 #include <assert.h>
@@ -32,7 +24,9 @@
 #include <soc/soc.h>
 #include <soc/dport_reg.h>
 #include "sdkconfig.h"
+#ifndef CONFIG_FREERTOS_UNICORE
 #include "esp_ipc.h"
+#endif
 #include "esp_attr.h"
 #include "esp_intr_alloc.h"
 #include "esp_spi_flash.h"
@@ -65,6 +59,17 @@ static volatile bool s_flash_op_complete = false;
 #ifndef NDEBUG
 static volatile int s_flash_op_cpu = -1;
 #endif
+
+static inline bool esp_task_stack_is_sane_cache_disabled(void)
+{
+    const void *sp = (const void *)get_sp();
+
+    return esp_ptr_in_dram(sp)
+#if CONFIG_ESP32_ALLOW_RTC_FAST_MEM_AS_HEAP || CONFIG_ESP32S2_ALLOW_RTC_FAST_MEM_AS_HEAP
+        || esp_ptr_in_rtc_dram_fast(sp)
+#endif
+    ;
+}
 
 void spi_flash_init_lock(void)
 {
@@ -113,7 +118,7 @@ void IRAM_ATTR spi_flash_op_block_func(void *arg)
 
 void IRAM_ATTR spi_flash_disable_interrupts_caches_and_other_cpu(void)
 {
-    assert(esp_ptr_in_dram((const void *)get_sp()));
+    assert(esp_task_stack_is_sane_cache_disabled());
 
     spi_flash_op_lock();
 
@@ -129,9 +134,9 @@ void IRAM_ATTR spi_flash_disable_interrupts_caches_and_other_cpu(void)
         // Scheduler hasn't been started yet, it means that spi_flash API is being
         // called from the 2nd stage bootloader or from user_start_cpu0, i.e. from
         // PRO CPU. APP CPU is either in reset or spinning inside user_start_cpu1,
-        // which is in IRAM. So it is safe to disable cache for the other_cpuid here.
+        // which is in IRAM. So it is safe to disable cache for the other_cpuid after
+        // esp_intr_noniram_disable.
         assert(other_cpuid == 1);
-        spi_flash_disable_cache(other_cpuid, &s_flash_op_cache_state[other_cpuid]);
     } else {
         // Temporarily raise current task priority to prevent a deadlock while
         // waiting for IPC task to start on the other CPU
@@ -465,11 +470,11 @@ esp_err_t esp_enable_cache_wrap(bool icache_wrap_enable, bool dcache_wrap_enable
     uint32_t instruction_use_spiram = 0;
     uint32_t rodata_use_spiram = 0;
 #if CONFIG_SPIRAM_FETCH_INSTRUCTIONS
-    extern uint32_t esp_spiram_instruction_access_enabled();
+    extern uint32_t esp_spiram_instruction_access_enabled(void);
     instruction_use_spiram = esp_spiram_instruction_access_enabled();
 #endif
 #if CONFIG_SPIRAM_RODATA
-    extern uint32_t esp_spiram_rodata_access_enabled();
+    extern uint32_t esp_spiram_rodata_access_enabled(void);
     rodata_use_spiram = esp_spiram_rodata_access_enabled();
 #endif
 

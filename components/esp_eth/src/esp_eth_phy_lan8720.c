@@ -266,15 +266,24 @@ static esp_err_t lan8720_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(lan8720->reset_gpio_num);
         gpio_set_direction(lan8720->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(lan8720->reset_gpio_num, 0);
+        /* assert nRST signal on LAN8720 a little longer than the minimum specified in datasheet */
+        ets_delay_us(150);
         gpio_set_level(lan8720->reset_gpio_num, 1);
     }
     return ESP_OK;
 }
 
+/**
+ * @note This function is responsible for restarting a new auto-negotiation,
+ *       the result of negotiation won't be relected to uppler layers.
+ *       Instead, the negotiation result is fetched by linker timer, see `lan8720_get_link()`
+ */
 static esp_err_t lan8720_negotiate(esp_eth_phy_t *phy)
 {
     phy_lan8720_t *lan8720 = __containerof(phy, phy_lan8720_t, parent);
     esp_eth_mediator_t *eth = lan8720->eth;
+    /* in case any link status has changed, let's assume we're in link down status */
+    lan8720->link_status = ETH_LINK_DOWN;
     /* Restart auto negotiation */
     bmcr_reg_t bmcr = {
         .speed_select = 1,     /* 100Mbps */
@@ -286,9 +295,9 @@ static esp_err_t lan8720_negotiate(esp_eth_phy_t *phy)
     /* Wait for auto negotiation complete */
     bmsr_reg_t bmsr;
     pscsr_reg_t pscsr;
-    int32_t to = 0;
-    for (to = 0; to < lan8720->autonego_timeout_ms / 10; to++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+    uint32_t to = 0;
+    for (to = 0; to < lan8720->autonego_timeout_ms / 100; to++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
         PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
                   "read BMSR failed", err);
         PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_PSCSR_REG_ADDR, &(pscsr.val)) == ESP_OK,
@@ -298,11 +307,9 @@ static esp_err_t lan8720_negotiate(esp_eth_phy_t *phy)
         }
     }
     /* Auto negotiation failed, maybe no network cable plugged in, so output a warning */
-    if (to >= lan8720->autonego_timeout_ms / 10) {
+    if (to >= lan8720->autonego_timeout_ms / 100 && (lan8720->link_status == ETH_LINK_UP)) {
         ESP_LOGW(TAG, "auto negotiation timeout");
     }
-    /* Updata information about link, speed, duplex */
-    PHY_CHECK(lan8720_update_link_duplex_speed(lan8720) == ESP_OK, "update link duplex speed failed", err);
     return ESP_OK;
 err:
     return ESP_FAIL;
@@ -324,12 +331,22 @@ static esp_err_t lan8720_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < lan8720->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < lan8720->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

@@ -34,6 +34,7 @@ API Reference
 -------------
 
 .. include-build-file:: inc/dac.inc
+.. include-build-file:: inc/dac_common.inc
 
 GPIO Lookup Macros
 ^^^^^^^^^^^^^^^^^^
@@ -44,3 +45,4 @@ e.g.
 2. ``DAC_{IDF_TARGET_DAC_CH_2}_CHANNEL`` is the channel number of GPIO 26 (channel 2).
 
 .. include-build-file:: inc/dac_channel.inc
+.. include-build-file:: inc/dac_types.inc

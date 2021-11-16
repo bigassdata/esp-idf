@@ -19,7 +19,6 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
-
 #define BUNDLE_HEADER_OFFSET 2
 #define CRT_HEADER_OFFSET 4
 
@@ -42,46 +41,48 @@ typedef struct crt_bundle_t {
 
 static crt_bundle_t s_crt_bundle;
 
-static int esp_crt_verify_callback(void *buf, mbedtls_x509_crt *crt, int data, uint32_t *flags);
-static esp_err_t esp_crt_check_signature(mbedtls_x509_crt *child, const uint8_t *pub_key_buf, size_t pub_key_len);
+static int esp_crt_check_signature(mbedtls_x509_crt *child, const uint8_t *pub_key_buf, size_t pub_key_len);
 
 
-static esp_err_t esp_crt_check_signature(mbedtls_x509_crt *child, const uint8_t *pub_key_buf, size_t pub_key_len)
+static int esp_crt_check_signature(mbedtls_x509_crt *child, const uint8_t *pub_key_buf, size_t pub_key_len)
 {
-    int ret = ESP_FAIL;
+    int ret = 0;
     mbedtls_x509_crt parent;
     const mbedtls_md_info_t *md_info;
     unsigned char hash[MBEDTLS_MD_MAX_SIZE];
 
     mbedtls_x509_crt_init(&parent);
 
-    if ( (ret = mbedtls_pk_parse_public_key(&parent.pk , pub_key_buf, pub_key_len) ) != 0) {
+    if ( (ret = mbedtls_pk_parse_public_key(&parent.pk, pub_key_buf, pub_key_len) ) != 0) {
         ESP_LOGE(TAG, "PK parse failed with error %X", ret);
-        return ESP_FAIL;
+        goto cleanup;
     }
 
 
     // Fast check to avoid expensive computations when not necessary
     if (!mbedtls_pk_can_do(&parent.pk, child->sig_pk)) {
         ESP_LOGE(TAG, "Simple compare failed");
-        return ESP_FAIL;
+        ret = -1;
+        goto cleanup;
     }
 
     md_info = mbedtls_md_info_from_type(child->sig_md);
     if ( (ret = mbedtls_md( md_info, child->tbs.p, child->tbs.len, hash )) != 0 ) {
         ESP_LOGE(TAG, "Internal mbedTLS error %X", ret);
-        return ESP_FAIL;
+        goto cleanup;
     }
 
-    ret = mbedtls_pk_verify_ext( child->sig_pk, child->sig_opts, &parent.pk,
-                                 child->sig_md, hash, mbedtls_md_get_size( md_info ),
-                                 child->sig.p, child->sig.len ) ;
+    if ( (ret = mbedtls_pk_verify_ext( child->sig_pk, child->sig_opts, &parent.pk,
+                                       child->sig_md, hash, mbedtls_md_get_size( md_info ),
+                                       child->sig.p, child->sig.len )) != 0 ) {
 
-    if (ret != 0) {
         ESP_LOGE(TAG, "PK verify failed with error %X", ret);
-        return ESP_FAIL;
+        goto cleanup;
     }
-    return ESP_OK;
+cleanup:
+    mbedtls_x509_crt_free(&parent);
+
+    return ret;
 }
 
 
@@ -91,11 +92,15 @@ static esp_err_t esp_crt_check_signature(mbedtls_x509_crt *child, const uint8_t 
  * only verify the first untrusted link in the chain is signed by the
  * root certificate in the trusted bundle
 */
-int esp_crt_verify_callback(void *buf, mbedtls_x509_crt *crt, int data, uint32_t *flags)
+int esp_crt_verify_callback(void *buf, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
 {
     mbedtls_x509_crt *child = crt;
 
-    if (*flags != MBEDTLS_X509_BADCERT_NOT_TRUSTED) {
+    /* It's OK for a trusted cert to have a weak signature hash alg.
+       as we already trust this certificate */
+    uint32_t flags_filtered = *flags & ~(MBEDTLS_X509_BADCERT_BAD_MD);
+
+    if (flags_filtered != MBEDTLS_X509_BADCERT_NOT_TRUSTED) {
         return 0;
     }
 
@@ -176,7 +181,7 @@ static esp_err_t esp_crt_bundle_init(const uint8_t *x509_bundle)
     return ESP_OK;
 }
 
-esp_err_t esp_crt_bundle_attach(mbedtls_ssl_config *conf)
+esp_err_t esp_crt_bundle_attach(void *conf)
 {
     esp_err_t ret = ESP_OK;
     // If no bundle has been set by the user then use the bundle embedded in the binary
@@ -194,9 +199,10 @@ esp_err_t esp_crt_bundle_attach(mbedtls_ssl_config *conf)
          * This is only required so that the
          * cacert_ptr passes non-NULL check during handshake
          */
+        mbedtls_ssl_config *ssl_conf = (mbedtls_ssl_config *)conf;
         mbedtls_x509_crt_init(&s_dummy_crt);
-        conf->ca_chain = &s_dummy_crt;
-        mbedtls_ssl_conf_verify(conf, esp_crt_verify_callback, NULL);
+        mbedtls_ssl_conf_ca_chain(ssl_conf, &s_dummy_crt, NULL);
+        mbedtls_ssl_conf_verify(ssl_conf, esp_crt_verify_callback, NULL);
     }
 
     return ret;
@@ -205,6 +211,7 @@ esp_err_t esp_crt_bundle_attach(mbedtls_ssl_config *conf)
 void esp_crt_bundle_detach(mbedtls_ssl_config *conf)
 {
     free(s_crt_bundle.crts);
+    s_crt_bundle.crts = NULL;
     if (conf) {
         mbedtls_ssl_conf_verify(conf, NULL, NULL);
     }

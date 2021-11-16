@@ -12,6 +12,7 @@ API 指南
    严重错误 <fatal-errors>
    Event Handling <event-handling>
    Deep Sleep Wake Stubs <deep-sleep-stub>
+   :esp32s2: Device Firmware Upgrade through USB <dfu>
    ESP32 Core Dump <core_dump>
    Flash Encryption <../security/flash-encryption>
    FreeRTOS SMP Changes <freertos-smp>
@@ -21,18 +22,18 @@ API 指南
    引导加载程序 <bootloader>
    分区表 <partition-tables>
    :esp32: Secure Boot <../security/secure-boot-v1>
-   :esp32:  Secure Boot V2 <../security/secure-boot-v2>
+   Secure Boot V2 <../security/secure-boot-v2>
    ULP 协处理器 <ulp>
    :esp32: ULP (传统 GNU Make) <ulp-legacy>
    单元测试 <unit-tests>
    :esp32: 单元测试 (传统 GNU Make) <unit-tests-legacy>
    应用层跟踪 <app_trace>
    ROM debug console <romconsole>
-   :esp32: RF Calibration <RF_calibration>
+   RF Calibration <RF_calibration>
    WiFi Driver <wifi>
-   :esp32: ESP-BLE-MESH <esp-ble-mesh/ble-mesh-index>
+   :SOC_BT_SUPPORTED: ESP-BLE-MESH <esp-ble-mesh/ble-mesh-index>
    ESP-MESH (Wi-Fi) <mesh>
-   :esp32: BluFi <blufi>
+   :SOC_BT_SUPPORTED: BluFi <blufi>
    External SPI-connected RAM <external-ram>
    链接脚本生成机制 <linker-script-generation>
    LwIP <lwip>

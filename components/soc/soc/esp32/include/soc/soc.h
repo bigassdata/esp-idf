@@ -327,7 +327,8 @@
 #define ETS_PWM3_INTR_SOURCE                    42/**< interruot of PWM3, level*/
 #define ETS_LEDC_INTR_SOURCE                    43/**< interrupt of LED PWM, level*/
 #define ETS_EFUSE_INTR_SOURCE                   44/**< interrupt of efuse, level, not likely to use*/
-#define ETS_CAN_INTR_SOURCE                     45/**< interrupt of can, level*/
+#define ETS_TWAI_INTR_SOURCE                    45/**< interrupt of twai, level*/
+#define ETS_CAN_INTR_SOURCE                     ETS_TWAI_INTR_SOURCE
 #define ETS_RTC_CORE_INTR_SOURCE                46/**< interrupt of rtc core, level, include rtc watchdog*/
 #define ETS_RMT_INTR_SOURCE                     47/**< interrupt of remote controller, level*/
 #define ETS_PCNT_INTR_SOURCE                    48/**< interrupt of pluse count, level*/
@@ -398,7 +399,9 @@
 #define ETS_TG0_T1_INUM                         10 /**< use edge interrupt*/
 #define ETS_FRC1_INUM                           22
 #define ETS_T1_WDT_INUM                         24
-#define ETS_CACHEERR_INUM                       25
+#define ETS_MEMACCESS_ERR_INUM                  25
+/* backwards compatibility only, use ETS_MEMACCESS_ERR_INUM instead*/
+#define ETS_CACHEERR_INUM                       ETS_MEMACCESS_ERR_INUM
 #define ETS_DPORT_INUM                          28
 
 //CPU0 Interrupt number used in ROM, should be cancelled in SDK

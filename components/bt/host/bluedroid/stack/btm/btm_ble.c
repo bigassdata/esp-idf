@@ -119,8 +119,7 @@ BOOLEAN BTM_SecAddBleDevice (BD_ADDR bd_addr, BD_NAME bd_name, tBT_DEVICE_TYPE d
 
     if (bd_name && bd_name[0]) {
         p_dev_rec->sec_flags |= BTM_SEC_NAME_KNOWN;
-        BCM_STRNCPY_S ((char *)p_dev_rec->sec_bd_name, sizeof (p_dev_rec->sec_bd_name),
-                       (char *)bd_name, BTM_MAX_REM_BD_NAME_LEN);
+        BCM_STRNCPY_S ((char *)p_dev_rec->sec_bd_name, (char *)bd_name, BTM_MAX_REM_BD_NAME_LEN);
     }
     p_dev_rec->device_type |= dev_type;
     p_dev_rec->ble.ble_addr_type = addr_type;
@@ -1963,7 +1962,7 @@ void btm_ble_conn_complete(UINT8 *p, UINT16 evt_len, BOOLEAN enhanced)
         * slave or master*/
 
         /* if (!match && role == HCI_ROLE_SLAVE && BTM_BLE_IS_RESOLVE_BDA(bda)) { */
-        if (!match && BTM_BLE_IS_RESOLVE_BDA(bda)) {
+        if (!match && bda_type != BLE_ADDR_PUBLIC && BTM_BLE_IS_RESOLVE_BDA(bda)) {
             // save the enhanced value to used in btm_ble_resolve_random_addr_on_conn_cmpl func.
             temp_enhanced = enhanced;
             btm_ble_resolve_random_addr(bda, btm_ble_resolve_random_addr_on_conn_cmpl, p_data);
@@ -2033,6 +2032,30 @@ void btm_ble_create_ll_conn_complete (UINT8 status)
         btm_ble_update_mode_operation(HCI_ROLE_UNKNOWN, NULL, status);
     }
 }
+
+/*****************************************************************************
+** Function btm_ble_create_conn_cancel_complete
+**
+** Description LE connection cancel complete.
+**
+******************************************************************************/
+void btm_ble_create_conn_cancel_complete (UINT8 *p)
+{
+    UINT8       status;
+
+    STREAM_TO_UINT8 (status, p);
+
+    switch (status) {
+    case HCI_SUCCESS:
+        if (btm_ble_get_conn_st() == BLE_CONN_CANCEL) {
+            btm_ble_set_conn_st (BLE_CONN_IDLE);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 /*****************************************************************************
 **  Function        btm_proc_smp_cback
 **

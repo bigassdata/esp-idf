@@ -129,9 +129,11 @@ function(__build_init idf_path)
     # Create the build target, to which the ESP-IDF build properties, dependencies are attached to
     add_library(__idf_build_target STATIC IMPORTED)
 
-    set_default(python "python")
+    # Set the Python path (which may be passed in via -DPYTHON=) and store in a build property
+    set_default(PYTHON "python")
+    file(TO_CMAKE_PATH ${PYTHON} PYTHON)
+    idf_build_set_property(PYTHON ${PYTHON})
 
-    idf_build_set_property(PYTHON ${python})
     idf_build_set_property(IDF_PATH ${idf_path})
 
     idf_build_set_property(__PREFIX idf)
@@ -154,7 +156,7 @@ function(__build_init idf_path)
     # Set components required by all other components in the build
     #
     # - lwip is here so that #include <sys/socket.h> works without any special provisions
-    set(requires_common cxx newlib freertos heap log lwip soc esp_rom esp_common xtensa)
+    set(requires_common cxx newlib freertos heap log lwip soc esp_rom esp_common esp_system xtensa)
     idf_build_set_property(__COMPONENT_REQUIRES_COMMON "${requires_common}")
 
     __build_get_idf_git_revision()
@@ -267,8 +269,12 @@ function(__build_check_python)
         message(STATUS "Checking Python dependencies...")
         execute_process(COMMAND "${python}" "${idf_path}/tools/check_python_dependencies.py"
             RESULT_VARIABLE result)
-        if(NOT result EQUAL 0)
+        if(result EQUAL 1)
+            # check_python_dependencies returns error code 1 on failure
             message(FATAL_ERROR "Some Python dependencies must be installed. Check above message for details.")
+        elseif(NOT result EQUAL 0)
+            # means check_python_dependencies.py failed to run at all, result should be an error message
+            message(FATAL_ERROR "Failed to run Python dependency check. Python: ${python}, Error: ${result}")
         endif()
     endif()
 endfunction()
@@ -314,7 +320,7 @@ endmacro()
 #
 macro(__build_set_default var default)
     set(_var __${var})
-    if(NOT "${_var}" STREQUAL "")
+    if(NOT "${${_var}}" STREQUAL "")
         idf_build_set_property(${var} "${${_var}}")
     else()
         idf_build_set_property(${var} "${default}")
@@ -474,8 +480,11 @@ function(idf_build_executable elf)
     # Set the EXECUTABLE_NAME and EXECUTABLE properties since there are generator expression
     # from components that depend on it
     get_filename_component(elf_name ${elf} NAME_WE)
+    get_target_property(elf_dir ${elf} BINARY_DIR)
+
     idf_build_set_property(EXECUTABLE_NAME ${elf_name})
     idf_build_set_property(EXECUTABLE ${elf})
+    idf_build_set_property(EXECUTABLE_DIR "${elf_dir}")
 
     # Add dependency of the build target to the executable
     add_dependencies(${elf} __idf_build_target)

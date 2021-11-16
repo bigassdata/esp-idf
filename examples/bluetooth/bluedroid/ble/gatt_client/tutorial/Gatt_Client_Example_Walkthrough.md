@@ -209,7 +209,7 @@ static struct gattc_profile_inst gl_profile_tab[PROFILE_NUM] = {
 };
 ```
 
-The initialization of the Application Profile table array includes defining the callback functions for each Profile. These are `gattc_profile_a_event_handler()` and `gattc_profile_a_event_handler()` respectively. In addition, the GATT interface is initialized to the default value of `ESP_GATT_IF_NONE`. Later on, when the Application Profile is registered, the BLE stack returns a GATT interface instance to use with that Application Profile. 
+The initialization of the Application Profile table array includes defining the callback function for Profile. It is `gattc_profile_event_handler()`. In addition, the GATT interface is initialized to the default value of `ESP_GATT_IF_NONE`. Later on, when the Application Profile is registered, the BLE stack returns a GATT interface instance to use with that Application Profile. 
 
 The profile registration triggers an `ESP_GATTC_REG_EVT` event, which is handled by the `esp_gattc_cb()` event handler. The handler takes the GATT interface returned by the event and stores it in the profile table:
 
@@ -484,6 +484,25 @@ Where,
 ```c
 #define REMOTE_SERVICE_UUID        0x00FF
 ```
+If UUID of the service application the user is interested in is 128-bit, then there is one note below for the user which is relevant with the little-endian storage mode of the processor architecture. 
+The struct of UUID is defined as:
+
+```c
+typedef struct {
+#define ESP_UUID_LEN_16     2
+#define ESP_UUID_LEN_32     4
+#define ESP_UUID_LEN_128    16
+    uint16_t len;							/*!< UUID length, 16bit, 32bit or 128bit */
+    union {
+        uint16_t    uuid16;                 /*!< 16bit UUID */
+        uint32_t    uuid32;                 /*!< 32bit UUID */
+        uint8_t     uuid128[ESP_UUID_LEN_128]; /*!< 128bit UUID */
+    } uuid;									/*!< UUID */
+} __attribute__((packed)) esp_bt_uuid_t;
+```
+
+Note: In little-endian storage mode, you can define service UUID directly in the normal order if it's a 16-bit or a 32-bit UUID, but if service UUID is 128-bit, there is minor difference. For example, if the UUID of the service application that the user is interested in is 12345678-a1b2-c3d4-e5f6-9fafd205e457, `REMOTE_SERVICE_UUID` should be defined as {0x57,0xE4,0x05,0xD2,0xAF,0x9F,0xF6,0xE5,0xD4,0xC3,0xB2,0xA1,0x78,0x56,0x34,0x12}.
+
 The services are then discovered as follows:
 
 ```c

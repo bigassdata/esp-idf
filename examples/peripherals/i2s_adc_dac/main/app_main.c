@@ -11,6 +11,8 @@
 #include "audio_example_file.h"
 #include "esp_adc_cal.h"
 
+#if CONFIG_IDF_TARGET_ESP32
+
 static const char* TAG = "ad/da";
 #define V_REF   1100
 #define ADC1_TEST_CHANNEL (ADC1_CHANNEL_7)
@@ -63,7 +65,7 @@ void example_i2s_init(void)
         .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN | I2S_MODE_ADC_BUILT_IN,
         .sample_rate =  EXAMPLE_I2S_SAMPLE_RATE,
         .bits_per_sample = EXAMPLE_I2S_SAMPLE_BITS,
-        .communication_format = I2S_COMM_FORMAT_PCM,
+        .communication_format = I2S_COMM_FORMAT_STAND_MSB,
         .channel_format = EXAMPLE_I2S_FORMAT,
         .intr_alloc_flags = 0,
         .dma_buf_count = 2,
@@ -288,5 +290,4 @@ esp_err_t app_main(void)
     xTaskCreate(adc_read_task, "ADC read task", 2048, NULL, 5, NULL);
     return ESP_OK;
 }
-
-
+#endif

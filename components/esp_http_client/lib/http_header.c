@@ -97,6 +97,7 @@ static esp_err_t http_header_new_item(http_header_handle_t header, const char *k
 _header_new_item_exit:
     free(item->key);
     free(item->value);
+    free(item);
     return ESP_ERR_NO_MEM;
 }
 
@@ -161,8 +162,8 @@ int http_header_set_format(http_header_handle_t header, const char *key, const c
     char *buf = NULL;
     va_start(argptr, format);
     len = vasprintf(&buf, format, argptr);
-    HTTP_MEM_CHECK(TAG, buf, return 0);
     va_end(argptr);
+    HTTP_MEM_CHECK(TAG, buf, return 0);
     if (buf == NULL) {
         return 0;
     }
@@ -191,6 +192,7 @@ int http_header_generate_string(http_header_handle_t header, int index, char *bu
         if (siz + 1 > *buffer_len - 2) {
             // if this item would not fit to the buffer, return the index of the last fitting one
             ret_idx = idx - 1;
+            ESP_LOGE(TAG, "Buffer length is small to fit all the headers");
             break;
         }
     }

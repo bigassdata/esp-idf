@@ -36,6 +36,9 @@ Linenoise library does not need explicit initialization. However, some configura
 :cpp:func:`linenoiseSetMultiLine`
   Switch between single line and multi line editing modes. In single line mode, if the length of the command exceeds the width of the terminal, the command text is scrolled within the line to show the end of the text. In this case the beginning of the text is hidden. Single line needs less data to be sent to refresh screen on each key press, so exhibits less glitching compared to the multi line mode. On the flip side, editing commands and copying command text from terminal in single line mode is harder. Default is single line mode.
 
+:cpp:func:`linenoiseAllowEmpty`
+  Set whether linenoise library will return a zero-length string (if ``true``) or ``NULL`` (if ``false``) for empty lines. By default, zero-length strings are returned.
+
 
 Main loop
 ^^^^^^^^^
@@ -145,9 +148,9 @@ Initialize console REPL environment
 
 To establish a basic REPL environment, ``console`` component provides several useful APIs, combining those functions described above.
 
-In a typical application, you only need to call :cpp:func:`esp_console_repl_init` to initialize the REPL environment, including UART driver install, basic console configuration, spawning a thread to do REPL task and register several useful commands (e.g. `help`, `quit`). 
+In a typical application, you only need to call :cpp:func:`esp_console_new_repl_uart` to initialize the REPL environment based on UART device, including driver install, basic console configuration, spawning a thread to do REPL task and register several useful commands (e.g. `help`). 
 
-After that, you can register your own commands with :cpp:func:`esp_console_cmd_register`. The REPL environment keeps in init state until you call :cpp:func:`esp_console_repl_start`.
+After that, you can register your own commands with :cpp:func:`esp_console_cmd_register`. The REPL environment keeps in init state until you call :cpp:func:`esp_console_start_repl`.
 
 Application Example
 -------------------

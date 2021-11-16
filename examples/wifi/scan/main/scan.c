@@ -43,6 +43,12 @@ static void print_auth_mode(int authmode)
     case WIFI_AUTH_WPA2_ENTERPRISE:
         ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_ENTERPRISE");
         break;
+    case WIFI_AUTH_WPA3_PSK:
+        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_PSK");
+        break;
+    case WIFI_AUTH_WPA2_WPA3_PSK:
+        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_WPA3_PSK");
+        break;
     default:
         ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_UNKNOWN");
         break;
@@ -118,7 +124,7 @@ static void wifi_scan(void)
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_scan_start(NULL, true));
+    esp_wifi_scan_start(NULL, true);
     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
     ESP_LOGI(TAG, "Total APs scanned = %u", ap_count);
@@ -131,7 +137,6 @@ static void wifi_scan(void)
         }
         ESP_LOGI(TAG, "Channel \t\t%d\n", ap_info[i].primary);
     }
-
 }
 
 void app_main(void)

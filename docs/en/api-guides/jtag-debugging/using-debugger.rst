@@ -2,14 +2,21 @@ Using Debugger
 --------------
 :link_to_translation:`zh_CN:[中文]`
 
-This section covers configuration and running debugger either from :ref:`jtag-debugging-using-debugger-eclipse`
-or :ref:`jtag-debugging-using-debugger-command-line`. It is recommended to first check if debugger works from :ref:`jtag-debugging-using-debugger-command-line` and then move to using Eclipse.
+This section covers configuration and running debugger using several methods:
+
+* from :ref:`jtag-debugging-using-debugger-eclipse`
+* from :ref:`jtag-debugging-using-debugger-command-line`
+* using :ref:`jtag-debugging-with-idf-py`.
 
 
 .. _jtag-debugging-using-debugger-eclipse:
 
 Eclipse
 ^^^^^^^
+
+.. note::
+
+    It is recommended to first check if debugger works using :ref:`jtag-debugging-with-idf-py` or from :ref:`jtag-debugging-using-debugger-command-line` and then move to using Eclipse.
 
 Debugging functionality is provided out of box in standard Eclipse installation. Another option is to use pluggins like "GDB Hardware Debugging" plugin. We have found this plugin quite convenient and decided to use throughout this guide.
 
@@ -188,3 +195,55 @@ Command Line
 Note the third line from bottom that shows debugger halting at breakpoint established in ``gdbinit`` file at function ``app_main()``. Since the processor is halted, the LED should not be blinking. If this is what you see as well, you are ready to start debugging.
 
 If you are not quite sure how to use GDB, check :ref:`jtag-debugging-examples-command-line` example debugging session in section :ref:`jtag-debugging-examples`.
+
+
+.. _jtag-debugging-with-idf-py:
+
+idf.py debug targets
+^^^^^^^^^^^^^^^^^^^^
+
+It is also possible to execute the described debugging tools conveniently from ``idf.py``. These commands are supported:
+
+1.  ``idf.py openocd``
+
+    Runs OpenOCD in a console with configuration defined in the environment or via command line.
+    It uses default script directory defined as ``OPENOCD_SCRIPTS`` environmental variable, which is automatically added
+    from an Export script (``export.sh`` or ``export.bat``). It is possible to override the script location
+    using command line argument ``--openocd-scripts``.
+
+    .. include:: {IDF_TARGET_TOOLCHAIN_NAME}.inc
+        :start-after: idf-py-openocd-default-cfg
+        :end-before: ---
+
+    As for the JTAG configuration of the current board, please use the environmental variable ``OPENOCD_COMMANDS``
+    or ``--openocd-commands`` command line argument. If none of the above is defined,
+    OpenOCD is started with |idf-py-def-cfg| board definition.
+
+
+2.  ``idf.py gdb``
+
+    Starts the gdb the same way as the :ref:`jtag-debugging-using-debugger-command-line`, but generates the initial gdb scripts
+    referring to the current project elf file.
+
+
+3.  ``idf.py gdbtui``
+
+    The same as `2`, but starts the gdb with ``tui`` argument allowing very simple source code view.
+
+
+4.  ``idf.py gdbgui``
+
+    Starts `gdbgui <https://www.gdbgui.com>`_ debugger frontend enabling out-of-the-box debugging in a browser window.
+
+
+    It is possible to combine these debugging actions on a single command line allowing convenient 
+    setup of blocking and non-blocking actions in one step. ``idf.py`` implements a simple logic to move the background
+    actions (such as openocd) to the beginning and the interactive ones (such as gdb, monitor) to the end of the action list.
+
+    An example of a very useful combination is::
+
+        idf.py openocd gdbgui monitor
+
+
+    The above command runs OpenOCD in the background, starts `gdbgui <https://www.gdbgui.com>`_ to open a browser window
+    with active debugger frontend and opens a serial monitor in the active console.

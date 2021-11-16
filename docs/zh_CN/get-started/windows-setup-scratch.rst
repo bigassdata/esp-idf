@@ -72,13 +72,6 @@ Python 安装完成后，从 Windows 开始菜单中打开“命令提示符”�
 
     pip install --user pyserial
 
-适用于 IDF 的 MConf
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-从 `kconfig-frontends releases page`_ 下载配置工具 mconf-idf。此为 ``mconf`` 配置工具，可针对 ESP-IDF 进行少量自定义操作。
-
-请将此工具解压到目录，并 :ref:`添加到您的路径 <add-directory-windows-path>`。
-
 工具链设置
 ===============
 
@@ -111,14 +104,14 @@ Python 安装完成后，从 Windows 开始菜单中打开“命令提示符”�
 后续步骤
 ==========
 
-继续设置开发环境，请前往 :ref:`get-started-get-esp-idf` 章节。
+继续设置开发环境，请前往 :ref:`get-started-set-up-tools` 章节。
 
 .. _cmake: https://cmake.org/download/
 .. _ninja: https://ninja-build.org/
 .. _ninja-dl: https://github.com/ninja-build/ninja/releases
 .. _Python: https://www.python.org/downloads/windows/
-.. _MSYS2: https://msys2.github.io/
+.. _MSYS2: https://www.msys2.org/
 .. _kconfig-frontends releases page: https://github.com/espressif/kconfig-frontends/releases
+.. Note: These two targets may be used from git-clone-notes.inc depending on version, don't remove
 .. _Stable version: https://docs.espressif.com/projects/esp-idf/zh_CN/stable/
-
-
+.. _Releases page: https://github.com/espressif/esp-idf/releases

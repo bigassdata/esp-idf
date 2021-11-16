@@ -12,6 +12,8 @@
 #include "wps/wps.h"
 
 
+#ifdef CONFIG_WPS_STRICT
+
 #ifndef WPS_STRICT_ALL
 #define WPS_STRICT_WPS2
 #endif /* WPS_STRICT_ALL */
@@ -2361,3 +2363,4 @@ _out:
 
 	return ret;
 }
+#endif

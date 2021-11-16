@@ -22,8 +22,9 @@
 
 #pragma once
 
-#include <soc/mcpwm_periph.h>
+#include "hal/hal_defs.h"
 #include "soc/mcpwm_periph.h"
+#include "soc/mcpwm_struct.h"
 #include "hal/mcpwm_types.h"
 #include "soc/mcpwm_caps.h"
 #include "hal/hal_defs.h"
@@ -61,7 +62,7 @@ static inline void mcpwm_ll_init(mcpwm_dev_t *mcpwm)
  */
 static inline void mcpwm_ll_set_clock_prescale(mcpwm_dev_t *mcpwm, int prescale)
 {
-    mcpwm->clk_cfg.prescale = prescale;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(mcpwm->clk_cfg, prescale, prescale);
 }
 
 STATIC_HAL_REG_CHECK(MCPWM, MCPWM_LL_INTR_CAP0, MCPWM_CAP0_INT_RAW);
@@ -156,7 +157,7 @@ static inline void mcpwm_ll_timer_stop(mcpwm_dev_t *mcpwm, int timer)
 static inline void mcpwm_ll_timer_set_period(mcpwm_dev_t *mcpwm, int timer, uint32_t period)
 {
 
-    mcpwm->timer[timer].period.period = period;
+    mcpwm->timer[timer].period.period = period - 1;
     mcpwm->timer[timer].period.upmethod = 0;
 }
 
@@ -169,7 +170,7 @@ static inline void mcpwm_ll_timer_set_period(mcpwm_dev_t *mcpwm, int timer, uint
  */
 static inline uint32_t mcpwm_ll_timer_get_period(mcpwm_dev_t *mcpwm, int timer)
 {
-    return mcpwm->timer[timer].period.period;
+    return mcpwm->timer[timer].period.period + 1;
 }
 
 /********************* Sync *******************/
@@ -684,9 +685,9 @@ static inline mcpwm_capture_on_edge_t mcpwm_ll_get_captured_edge(mcpwm_dev_t *mc
     if (cap_sig == 0) {
         edge = mcpwm->cap_status.cap0_edge;
     } else if (cap_sig == 1) {
-        edge = mcpwm->cap_status.cap0_edge;
+        edge = mcpwm->cap_status.cap1_edge;
     } else {   //2
-        edge = mcpwm->cap_status.cap0_edge;
+        edge = mcpwm->cap_status.cap2_edge;
     }
     return (edge? MCPWM_NEG_EDGE: MCPWM_POS_EDGE);
 }

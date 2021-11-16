@@ -23,7 +23,9 @@
 #pragma once
 
 #include <stdlib.h>
+#include "hal/hal_defs.h"
 #include "soc/spi_periph.h"
+#include "soc/spi_struct.h"
 #include "hal/spi_types.h"
 #include "hal/spi_flash_types.h"
 #include <sys/param.h> // For MIN/MAX
@@ -43,7 +45,16 @@ extern "C" {
 #define SPI_FLASH_LL_CLKREG_VAL_80MHZ   ((spi_flash_ll_clock_reg_t){.val=0x80000000})   ///< Clock set to 80 MHz
 
 /// Get the start address of SPI peripheral registers by the host ID
-#define spi_flash_ll_get_hw(host_id)  ((host_id)==SPI1_HOST? &SPI1:((host_id)==SPI2_HOST?&SPI2:((host_id)==SPI3_HOST?&SPI3:({abort();(spi_dev_t*)0;}))))
+#define spi_flash_ll_get_hw(host_id) ( ((host_id)==SPI1_HOST) ? &SPI1 :(\
+                                       ((host_id)==SPI2_HOST) ? &SPI2 :(\
+                                       ((host_id)==SPI3_HOST) ? &SPI3 :(\
+                                       {abort();(spi_dev_t*)0;}\
+                                     ))) )
+#define spi_flash_ll_hw_get_id(dev) ( ((dev) == &SPI1) ? SPI1_HOST :(\
+                                      ((dev) == &SPI2) ? SPI2_HOST :(\
+                                      ((dev) == &SPI3) ? SPI3_HOST :(\
+                                      -1\
+                                    ))) )
 
 /// Empty function to be compatible with new version chips.
 #define spi_flash_ll_set_dummy_out(dev, out_en, out_lev)
@@ -161,12 +172,12 @@ static inline void spi_flash_ll_write_word(spi_dev_t *dev, uint32_t word)
 
 /**
  * Set the data to be written in the data buffer.
- * 
+ *
  * @param dev Beginning address of the peripheral registers.
- * @param buffer Buffer holding the data 
+ * @param buffer Buffer holding the data
  * @param length Length of data in bytes.
  */
-static inline void spi_flash_ll_set_buffer_data(spi_dev_t *dev, const void *buffer, uint32_t length) 
+static inline void spi_flash_ll_set_buffer_data(spi_dev_t *dev, const void *buffer, uint32_t length)
 {
     // Load data registers, word at a time
     int num_words = (length + 3) >> 2;
@@ -324,10 +335,10 @@ static inline void spi_flash_ll_set_command8(spi_dev_t *dev, uint8_t command)
 
 /**
  * Get the address length that is set in register, in bits.
- * 
+ *
  * @param dev Beginning address of the peripheral registers.
- * 
- */ 
+ *
+ */
 static inline int spi_flash_ll_get_addr_bitlen(spi_dev_t *dev)
 {
     return dev->user.usr_addr ? dev->user1.usr_addr_bitlen + 1 : 0;
@@ -376,7 +387,13 @@ static inline void spi_flash_ll_set_address(spi_dev_t *dev, uint32_t addr)
 static inline void spi_flash_ll_set_dummy(spi_dev_t *dev, uint32_t dummy_n)
 {
     dev->user.usr_dummy = dummy_n ? 1 : 0;
-    dev->user1.usr_dummy_cyclelen = dummy_n - 1;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->user1, usr_dummy_cyclelen, dummy_n - 1);
+}
+
+static inline void spi_flash_ll_set_cs_setup(spi_dev_t *dev, uint32_t cs_setup_time)
+{
+    dev->user.cs_setup = (cs_setup_time > 0 ? 1 : 0);
+    dev->ctrl2.setup_time = cs_setup_time - 1;
 }
 
 #ifdef __cplusplus

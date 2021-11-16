@@ -328,19 +328,19 @@ class ESPCoreDumpElfFile(esptool.ELFFile):
     # extra regs IDs used in EXTRA_INFO note
     REG_EXCCAUSE_IDX    = 0
     REG_EXCVADDR_IDX    = 1
-    REG_EPS2_IDX        = 2
-    REG_EPS3_IDX        = 3
-    REG_EPS4_IDX        = 4
-    REG_EPS5_IDX        = 5
-    REG_EPS6_IDX        = 6
-    REG_EPS7_IDX        = 7
-    REG_EPC1_IDX        = 8
-    REG_EPC2_IDX        = 9
-    REG_EPC3_IDX        = 10
-    REG_EPC4_IDX        = 11
-    REG_EPC5_IDX        = 12
-    REG_EPC6_IDX        = 13
-    REG_EPC7_IDX        = 14
+    REG_EPC1_IDX        = 177
+    REG_EPC2_IDX        = 178
+    REG_EPC3_IDX        = 179
+    REG_EPC4_IDX        = 180
+    REG_EPC5_IDX        = 181
+    REG_EPC6_IDX        = 182
+    REG_EPC7_IDX        = 183
+    REG_EPS2_IDX        = 194
+    REG_EPS3_IDX        = 195
+    REG_EPS4_IDX        = 196
+    REG_EPS5_IDX        = 197
+    REG_EPS6_IDX        = 198
+    REG_EPS7_IDX        = 199
     # ELF file type
     ET_NONE             = 0x0  # No file type
     ET_REL              = 0x1  # Relocatable file
@@ -889,7 +889,7 @@ class ESPCoreDumpLoader(ESPCoreDumpVersion):
                     core_off += self.ESP_COREDUMP_MEM_SEG_HDR_SZ
                     mem_start,mem_sz = struct.unpack_from(self.ESP_COREDUMP_MEM_SEG_HDR_FMT, data)
                     logging.debug("Read memory segment %d bytes @ 0x%x" % (mem_sz, mem_start))
-                    data = self.read_data(core_off, stack_len_aligned)
+                    data = self.read_data(core_off, mem_sz)
                     core_elf.add_program_segment(mem_start, data, ESPCoreDumpElfFile.PT_LOAD, ESPCoreDumpSegment.PF_R | ESPCoreDumpSegment.PF_W)
                     core_off += mem_sz
             # add notes
@@ -1640,19 +1640,16 @@ def info_corefile(args):
             exccause_str = ("Invalid EXCCAUSE code", "Invalid EXCAUSE description or not found.")
         print("exccause       0x%x (%s)" % (exccause, exccause_str[0]))
         print("excvaddr       0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EXCVADDR_IDX + 1])
-        print("epc1           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC1_IDX + 1])
-        print("epc2           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC2_IDX + 1])
-        print("epc3           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC3_IDX + 1])
-        print("epc4           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC4_IDX + 1])
-        print("epc5           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC5_IDX + 1])
-        print("epc6           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC6_IDX + 1])
-        print("epc7           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPC7_IDX + 1])
-        print("eps2           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPS2_IDX + 1])
-        print("eps3           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPS3_IDX + 1])
-        print("eps4           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPS4_IDX + 1])
-        print("eps5           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPS5_IDX + 1])
-        print("eps6           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPS6_IDX + 1])
-        print("eps7           0x%x" % extra_info[1 + 2 * ESPCoreDumpElfFile.REG_EPS7_IDX + 1])
+
+        # skip crashed_task_tcb, exccause, and excvaddr
+        for i in range(5, len(extra_info), 2):
+            if (extra_info[i] >= ESPCoreDumpElfFile.REG_EPC1_IDX and extra_info[i] <= ESPCoreDumpElfFile.REG_EPC7_IDX):
+                print('epc%d           0x%x' % ((extra_info[i] - ESPCoreDumpElfFile.REG_EPC1_IDX + 1), extra_info[i + 1]))
+
+        # skip crashed_task_tcb, exccause, and excvaddr
+        for i in range(5, len(extra_info), 2):
+            if (extra_info[i] >= ESPCoreDumpElfFile.REG_EPS2_IDX and extra_info[i] <= ESPCoreDumpElfFile.REG_EPS7_IDX):
+                print('eps%d           0x%x' % ((extra_info[i] - ESPCoreDumpElfFile.REG_EPS2_IDX + 2), extra_info[i + 1]))
     else:
         print("Exception registers have not been found!")
     p = gdbmi_getinfo(p, handlers, "info registers")
@@ -1668,15 +1665,17 @@ def info_corefile(args):
     p = gdbmi_getinfo(p, handlers, "info threads")
     # THREADS STACKS
     p,threads,cur_thread = gdbmi_get_thread_ids(p)
+    print()
     for thr_id in threads:
         task_index = int(thr_id) - 1
-        if thr_id == cur_thread:
-            continue
         p = gdbmi_switch_thread(p, thr_id)
         p,thr_info_res = gdbmi_get_thread_info(p, thr_id)
+        if not thr_info_res.target_id:
+            print("WARNING: Unable to switch to thread %s\n" % thr_id)
+            continue
         tcb_addr = gdb2freertos_thread_id(thr_info_res.target_id)
         p,task_name = gdbmi_freertos_get_task_name(p, tcb_addr)
-        print("\n==================== THREAD %s (TCB: 0x%x, name: '%s') =====================" % (thr_id, tcb_addr, task_name))
+        print("==================== THREAD %s (TCB: 0x%x, name: '%s') =====================" % (thr_id, tcb_addr, task_name))
         p = gdbmi_getinfo(p, handlers, "bt")
         if task_info and task_info[task_index].task_flags != EspCoreDumpTaskStatus.TASK_STATUS_CORRECT:
             print("The task '%s' is corrupted." % thr_id)
@@ -1684,6 +1683,7 @@ def info_corefile(args):
                   task_info[task_index].task_flags,
                   task_info[task_index].task_tcb_addr,
                   task_info[task_index].task_stack_start))
+        print()
     print("\n======================= ALL MEMORY REGIONS ========================")
     print("Name   Address   Size   Attrs")
     for ms in merged_segs:

@@ -80,7 +80,7 @@ esp_err_t timer_get_counter_time_sec(timer_group_t group_num, timer_idx_t timer_
     uint64_t timer_val;
     esp_err_t err = timer_get_counter_value(group_num, timer_num, &timer_val);
     if (err == ESP_OK) {
-        uint16_t div;
+        uint32_t div;
         timer_hal_get_divider(&(p_timer_obj[group_num][timer_num]->hal), &div);
         *time = (double)timer_val * div / rtc_clk_apb_freq_get();
 #ifdef TIMER_GROUP_SUPPORTS_XTAL_CLOCK
@@ -198,6 +198,8 @@ esp_err_t timer_set_alarm(timer_group_t group_num, timer_idx_t timer_num, timer_
 
 static void IRAM_ATTR timer_isr_default(void *arg)
 {
+    bool is_awoken = false;
+
     timer_obj_t *timer_obj = (timer_obj_t *)arg;
     if (timer_obj == NULL) {
         return;
@@ -211,14 +213,22 @@ static void IRAM_ATTR timer_isr_default(void *arg)
         uint32_t intr_status = 0;
         timer_hal_get_intr_status(&(timer_obj->hal), &intr_status);
         if (intr_status & BIT(timer_obj->hal.idx)) {
-            timer_obj->timer_isr_fun.fn(timer_obj->timer_isr_fun.args);
+            is_awoken = timer_obj->timer_isr_fun.fn(timer_obj->timer_isr_fun.args);
             //Clear intrrupt status
             timer_hal_clear_intr_status(&(timer_obj->hal));
-            //After the alarm has been triggered, we need enable it again, so it is triggered the next time.
-            timer_hal_set_alarm_enable(&(timer_obj->hal), TIMER_ALARM_EN);
+            //If the timer is set to auto reload, we need enable it again, so it is triggered the next time.
+            if (timer_hal_get_auto_reload(&timer_obj->hal)) {
+                timer_hal_set_alarm_enable(&(timer_obj->hal), TIMER_ALARM_EN);
+            } else {
+                timer_hal_set_alarm_enable(&(timer_obj->hal), TIMER_ALARM_DIS);
+            }
         }
     }
     TIMER_EXIT_CRITICAL(&timer_spinlock[timer_obj->timer_isr_fun.isr_timer_group]);
+
+    if (is_awoken) {
+        portYIELD_FROM_ISR();
+    }
 }
 
 esp_err_t timer_isr_callback_add(timer_group_t group_num, timer_idx_t timer_num, timer_isr_t isr_handler, void *args, int intr_alloc_flags)
@@ -262,7 +272,7 @@ esp_err_t timer_isr_register(timer_group_t group_num, timer_idx_t timer_num,
 
     int intr_source = 0;
     uint32_t status_reg = 0;
-    int mask = 0;
+    uint32_t mask = 0;
     switch (group_num) {
     case TIMER_GROUP_0:
     default:
@@ -271,8 +281,7 @@ esp_err_t timer_isr_register(timer_group_t group_num, timer_idx_t timer_num,
         } else {
             intr_source = ETS_TG0_T0_EDGE_INTR_SOURCE + timer_num;
         }
-        timer_hal_get_intr_status_reg(&(p_timer_obj[TIMER_GROUP_0][timer_num]->hal), &status_reg);
-        mask = 1 << timer_num;
+        timer_hal_get_status_reg_mask_bit(&(p_timer_obj[TIMER_GROUP_0][timer_num]->hal), &status_reg, &mask);
         break;
     case TIMER_GROUP_1:
         if ((intr_alloc_flags & ESP_INTR_FLAG_EDGE) == 0) {
@@ -280,8 +289,7 @@ esp_err_t timer_isr_register(timer_group_t group_num, timer_idx_t timer_num,
         } else {
             intr_source = ETS_TG1_T0_EDGE_INTR_SOURCE + timer_num;
         }
-        timer_hal_get_intr_status_reg(&(p_timer_obj[TIMER_GROUP_1][timer_num]->hal), &status_reg);
-        mask = 1 << timer_num;
+        timer_hal_get_status_reg_mask_bit(&(p_timer_obj[TIMER_GROUP_1][timer_num]->hal), &status_reg, &mask);
         break;
     }
     return esp_intr_alloc_intrstatus(intr_source, intr_alloc_flags, status_reg, mask, fn, arg, handle);
@@ -363,13 +371,9 @@ esp_err_t timer_get_config(timer_group_t group_num, timer_idx_t timer_num, timer
     config->counter_dir = timer_hal_get_counter_increase(&(p_timer_obj[group_num][timer_num]->hal));
     config->counter_en = timer_hal_get_counter_enable(&(p_timer_obj[group_num][timer_num]->hal));
 
-    uint16_t div;
+    uint32_t div;
     timer_hal_get_divider(&(p_timer_obj[group_num][timer_num]->hal), &div);
-    if (div == 0) {
-        config->divider = 65536;
-    } else {
-        config->divider = div;
-    }
+    config->divider = div;
 
     if (timer_hal_get_level_int_enable(&(p_timer_obj[group_num][timer_num]->hal))) {
         config->intr_type = TIMER_INTR_LEVEL;
@@ -497,14 +501,14 @@ bool IRAM_ATTR timer_group_get_auto_reload_in_isr(timer_group_t group_num, timer
     return timer_hal_get_auto_reload(&(p_timer_obj[group_num][timer_num]->hal));
 }
 
-esp_err_t timer_spinlock_take(timer_group_t group_num)
+esp_err_t IRAM_ATTR timer_spinlock_take(timer_group_t group_num)
 {
     TIMER_CHECK(group_num < TIMER_GROUP_MAX, TIMER_GROUP_NUM_ERROR, ESP_ERR_INVALID_ARG);
     TIMER_ENTER_CRITICAL(&timer_spinlock[group_num]);
     return ESP_OK;
 }
 
-esp_err_t timer_spinlock_give(timer_group_t group_num)
+esp_err_t IRAM_ATTR timer_spinlock_give(timer_group_t group_num)
 {
     TIMER_CHECK(group_num < TIMER_GROUP_MAX, TIMER_GROUP_NUM_ERROR, ESP_ERR_INVALID_ARG);
     TIMER_EXIT_CRITICAL(&timer_spinlock[group_num]);

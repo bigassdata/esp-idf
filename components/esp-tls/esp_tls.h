@@ -64,6 +64,7 @@ extern "C" {
 #define ESP_ERR_WOLFSSL_SSL_SETUP_FAILED                  (ESP_ERR_ESP_TLS_BASE + 0x19)  /*!< wolfSSL api returned failed */
 #define ESP_ERR_WOLFSSL_SSL_WRITE_FAILED                  (ESP_ERR_ESP_TLS_BASE + 0x1A)  /*!< wolfSSL api returned failed */
 
+#define ESP_ERR_ESP_TLS_SE_FAILED                         (ESP_ERR_ESP_TLS_BASE + 0x1B)  /*< esp-tls use Secure Element returned failed */
 #ifdef CONFIG_ESP_TLS_USING_MBEDTLS
 #define ESP_TLS_ERR_SSL_WANT_READ                          MBEDTLS_ERR_SSL_WANT_READ
 #define ESP_TLS_ERR_SSL_WANT_WRITE                         MBEDTLS_ERR_SSL_WANT_WRITE
@@ -108,6 +109,16 @@ typedef struct psk_key_hint {
     const size_t   key_size;                /*!< length of the key */
     const char* hint;                       /*!< hint in PSK authentication mode in string format */
 } psk_hint_key_t;
+
+/**
+ *  @brief Keep alive parameters structure
+ */
+typedef struct tls_keep_alive_cfg {
+    bool keep_alive_enable;               /*!< Enable keep-alive timeout */
+    int keep_alive_idle;                  /*!< Keep-alive idle time (second) */
+    int keep_alive_interval;              /*!< Keep-alive interval time (second) */
+    int keep_alive_count;                 /*!< Keep-alive packet retry send count */
+} tls_keep_alive_cfg_t;
 
 /**
  * @brief      ESP-TLS configuration parameters
@@ -183,6 +194,9 @@ typedef struct esp_tls_cfg {
                                                  underneath socket will be configured in non
                                                  blocking mode after tls session is established */
 
+    bool use_secure_element;                /*!< Enable this option to use secure element or
+                                                 atecc608a chip ( Integrated with ESP32-WROOM-32SE ) */
+
     int timeout_ms;                         /*!< Network timeout in milliseconds */
 
     bool use_global_ca_store;               /*!< Use a global ca_store for all the connections in which
@@ -197,10 +211,10 @@ typedef struct esp_tls_cfg {
                                                  then PSK authentication is enabled with configured setup.
                                                  Important note: the pointer must be valid for connection */
 
-    esp_err_t (*crt_bundle_attach)(mbedtls_ssl_config *conf);
+    esp_err_t (*crt_bundle_attach)(void *conf);
                                             /*!< Function pointer to esp_crt_bundle_attach. Enables the use of certification
                                                  bundle for server verification, must be enabled in menuconfig */
-
+    tls_keep_alive_cfg_t *keep_alive_cfg;   /*!< Enable TCP keep-alive timeout for SSL connection */
 } esp_tls_cfg_t;
 
 #ifdef CONFIG_ESP_TLS_SERVER
@@ -433,12 +447,14 @@ int esp_tls_conn_http_new_async(const char *url, const esp_tls_cfg_t *cfg, esp_t
  * @param[in]  datalen  Length of data buffer.
  *
  * @return
- *             - >0  if write operation was successful, the return value is the number
+ *             - >=0  if write operation was successful, the return value is the number
  *                   of bytes actually written to the TLS/SSL connection.
- *             -  0  if write operation was not successful. The underlying
- *                   connection was closed.
  *             - <0  if write operation was not successful, because either an
  *                   error occured or an action must be taken by the calling process.
+ *             - ESP_TLS_ERR_SSL_WANT_READ/
+ *               ESP_TLS_ERR_SSL_WANT_WRITE.
+ *                  if the handshake is incomplete and waiting for data to be available for reading.
+ *                  In this case this functions needs to be called again when the underlying transport is ready for operation.
  */
 static inline ssize_t esp_tls_conn_write(esp_tls_t *tls, const void *data, size_t datalen)
 {
@@ -466,14 +482,26 @@ static inline ssize_t esp_tls_conn_read(esp_tls_t *tls, void  *data, size_t data
 }
 
 /**
+ * @brief      Compatible version of esp_tls_conn_destroy() to close the TLS/SSL connection
+ *
+ * @note This API will be removed in IDFv5.0
+ *
+ * @param[in]  tls  pointer to esp-tls as esp-tls handle.
+ */
+void esp_tls_conn_delete(esp_tls_t *tls);
+
+/**
  * @brief      Close the TLS/SSL connection and free any allocated resources.
  *
  * This function should be called to close each tls connection opened with esp_tls_conn_new() or
  * esp_tls_conn_http_new() APIs.
  *
  * @param[in]  tls  pointer to esp-tls as esp-tls handle.
+ *
+ * @return    - 0 on success
+ *            - -1 if socket error or an invalid argument
  */
-void esp_tls_conn_delete(esp_tls_t *tls);
+int esp_tls_conn_destroy(esp_tls_t *tls);
 
 /**
  * @brief      Return the number of application data bytes remaining to be

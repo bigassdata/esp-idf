@@ -13,30 +13,10 @@
 
 以下是乐鑫 {IDF_TARGET_NAME} 开发板驱动程序的链接：
 
-.. only:: esp32
-
-    .. csv-table::
-        :header: 开发板, USB 驱动, 备注
-        :widths: 40, 20, 40
-
-        :ref:`ESP32-DevKitC <esp-modules-and-boards-esp32-devkitc>`,  `CP210x`_
-        `ESP32-LyraT <https://www.espressif.com/en/products/hardware/esp32-lyrat>`_, `CP210x`_
-        `ESP32-LyraTD-MSC <https://www.espressif.com/en/products/hardware/esp32-lyratd-msc>`_, `CP210x`_
-        :ref:`ESP32-PICO-KIT <esp-modules-and-boards-esp32-pico-kit>`, `CP210x`_
-        :ref:`ESP-WROVER-KIT <esp-modules-and-boards-esp-wrover-kit>`, `FTDI`_
-        :ref:`ESP32 Demo 板 <esp-modules-and-boards-esp32-demo-board>`, `FTDI`_
-        `ESP-Prog`_, `FTDI`_, 编程板 (w/o ESP32)
-        `ESP32-MeshKit-Sense <https://github.com/espressif/esp-iot-solution/blob/master/documents/evaluation_boards/ESP32-MeshKit-Sense_guide_en.md#esp32-meshkit-sense-hardware-design-guidelines>`_, n/a, 搭配 `ESP-Prog`_ 使用
-        `ESP32-Sense Kit <https://github.com/espressif/esp-iot-solution/blob/master/documents/evaluation_boards/esp32_sense_kit_guide_en.md#guide-for-esp32-sense-development-kit>`_, n/a, 搭配 `ESP-Prog`_ 使用
-
-.. _CP210x: https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
-.. _FTDI: http://www.ftdichip.com/Drivers/VCP.htm
-.. _ESP-Prog: https://github.com/espressif/esp-iot-solution/blob/master/documents/evaluation_boards/ESP-Prog_guide_en.md#introduction-to-the-esp-prog-board
-
 * CP210x: `CP210x USB 至 UART 桥 VCP 驱动程序 <https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers>`_
-* FTDI: `FTDI 虚拟 COM 端口驱动程序 <http://www.ftdichip.com/Drivers/VCP.htm>`_
+* FTDI: `FTDI 虚拟 COM 端口驱动程序 <https://www.ftdichip.com/Drivers/VCP.htm>`_
 
-以上驱动仅用于参考。一般情况下，当上述任一 {IDF_TARGET_NAME} 开发板与 PC 连接时，对应驱动程序应该已经被打包在操作系统中，并已经自动安装。
+以上驱动仅供参考，请参考开发板用户指南，查看开发板具体使用的 USB 转串口芯片。一般情况下，当 {IDF_TARGET_NAME} 开发板与 PC 连接时，对应驱动程序应该已经被打包在操作系统中，并已经自动安装。
 
 在 Windows 上查看端口
 ---------------------
@@ -60,7 +40,7 @@
     Windows 设备管理器中 ESP-WROVER-KIT 的两个 USB 串行端口
 
 
-在 Linux 和 MacOS 上查看端口
+在 Linux 和 macOS 上查看端口
 -----------------------------
 
 查看 {IDF_TARGET_NAME} 开发板（或外部转串口适配器）的串口设备名称，请运行两次以下命令。首先，断开开发板或适配器，第一次运行命令；然后，连接开发板或适配器，第二次运行命令。其中，第二次运行命令后出现的端口即是 {IDF_TARGET_NAME} 对应的串口：
@@ -69,13 +49,13 @@ Linux ::
 
     ls /dev/tty*
 
-MacOS ::
+macOS ::
 
     ls /dev/cu.*
 
 .. note::
 
-    对于 MacOS 用户：若你没有看到串口，请检查你是否已按照《入门指南》安装了适用于你特定开发板的 USB/串口驱动程序。对于 MacOS High Sierra (10.13) 的用户，你可能还需要手动允许驱动程序的加载，具体可打开 ``系统偏好设置`` -> ``安全和隐私`` -> ``通用``，检查是否有信息显示：“来自开发人员的系统软件...”，其中开发人员的名称为 Silicon Labs 或 FTDI。
+    对于 macOS 用户：若你没有看到串口，请检查你是否已按照《入门指南》安装了适用于你特定开发板的 USB/串口驱动程序。对于 macOS High Sierra (10.13) 的用户，你可能还需要手动允许驱动程序的加载，具体可打开 ``系统偏好设置`` -> ``安全和隐私`` -> ``通用``，检查是否有信息显示：“来自开发人员的系统软件...”，其中开发人员的名称为 Silicon Labs 或 FTDI。
 
 .. _linux-dialout-group:
 
@@ -96,7 +76,7 @@ MacOS ::
 确认串口连接
 ------------------------
 
-现在，请使用串口终端程序，验证串口连接是否可用。在本示例中，我们将使用 `PuTTY SSH Client <http://www.putty.org/>`_， `PuTTY SSH Client <http://www.putty.org/>`_ 既可用于 Windows 也可用于 Linux。你也可以使用其他串口程序并设置如下的通信参数。
+现在，请使用串口终端程序，验证串口连接是否可用。在本示例中，我们将使用 `PuTTY SSH Client <https://www.putty.org/>`_， `PuTTY SSH Client <https://www.putty.org/>`_ 既可用于 Windows 也可用于 Linux。你也可以使用其他串口程序并设置如下的通信参数。
 
 运行终端，配置串口：波特率 = 115200，数据位 = 8，停止位 = 1，奇偶校验 = N。以下截屏分别展示了在 Windows 和 Linux 中配置串口和上述通信参数（如 115200-8-1-N）。注意，这里一定要选择在上述步骤中确认的串口进行配置。
 
@@ -152,6 +132,4 @@ MacOS ::
 
 如你在安装 {IDF_TARGET_NAME} 硬件开发的软件环境时，从 :ref:`get-started-connect` 跳转到了这里，请从 :ref:`get-started-configure` 继续阅读。
 
-
 .. _esptool 文档: https://github.com/espressif/esptool/wiki/ESP32-Boot-Mode-Selection#automatic-bootloader
-

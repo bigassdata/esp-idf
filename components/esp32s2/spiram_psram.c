@@ -47,6 +47,8 @@
 #if CONFIG_SPIRAM
 #include "soc/rtc.h"
 
+static const char* TAG = "psram";
+
 //Commands for PSRAM chip
 #define PSRAM_READ                 0x03
 #define PSRAM_FAST_READ            0x0B
@@ -150,7 +152,6 @@ typedef struct {
     .psram_spihd_sd2_io = PSRAM_SPIHD_SD2_IO,  \
 }
 
-//static const char* TAG = "psram";
 typedef enum {
     PSRAM_SPI_1  = 0x1,
     /* PSRAM_SPI_2, */
@@ -305,11 +306,9 @@ bool psram_support_wrap_size(uint32_t wrap_size)
 
 }
 
-//read psram id
-static void psram_read_id(uint32_t* dev_id)
+//read psram id, should issue `psram_disable_qio_mode` before calling this
+static void psram_read_id(int spi_num, uint32_t* dev_id)
 {
-    int spi_num = PSRAM_SPI_1;
-    psram_disable_qio_mode(spi_num);
     psram_exec_cmd(spi_num, PSRAM_CMD_SPI,
     PSRAM_DEVICE_ID, 8,               /* command and command bit len*/
     0, 24,                            /* address and address bit len*/
@@ -377,15 +376,7 @@ static void IRAM_ATTR psram_gpio_config(psram_cache_mode_t mode)
         psram_io.psram_spihd_sd2_io = EFUSE_SPICONFIG_RET_SPIHD(spiconfig);
         psram_io.psram_spiwp_sd3_io = ets_efuse_get_wp_pad();
     }
-
-    #if CONFIG_ESPTOOLPY_FLASHMODE_QIO || CONFIG_FLASHMODE_QOUT
-    // WP/HD already configured in bootloader.
-    psram_io.psram_spiwp_sd3_io = (psram_io.psram_spiwp_sd3_io <= MAX_PAD_GPIO_NUM ? psram_io.psram_spiwp_sd3_io : CONFIG_BOOTLOADER_SPI_WP_PIN);
-    #else
-    
-    psram_io.psram_spiwp_sd3_io = (psram_io.psram_spiwp_sd3_io <= MAX_PAD_GPIO_NUM ? psram_io.psram_spiwp_sd3_io : CONFIG_SPIRAM_SPIWP_SD3_PIN);
     esp_rom_spiflash_select_qio_pins(psram_io.psram_spiwp_sd3_io, spiconfig);
-    #endif
 }
 
 psram_size_t psram_get_size(void)
@@ -431,9 +422,20 @@ esp_err_t IRAM_ATTR psram_enable(psram_cache_mode_t mode, psram_vaddr_mode_t vad
     /* SPI1: set cs timing(hold time) in order to send commands on SPI1 */
     psram_set_clk_mode(_SPI_FLASH_PORT, PSRAM_CLK_MODE_A1C);
     psram_set_spi1_cmd_cs_timing(PSRAM_CLK_MODE_A1C);
-    psram_read_id(&s_psram_id);    
+
+    int spi_num = PSRAM_SPI_1;
+    psram_disable_qio_mode(spi_num);
+    psram_read_id(spi_num, &s_psram_id);
     if (!PSRAM_IS_VALID(s_psram_id)) {
-        return ESP_FAIL;
+        /* 16Mbit psram ID read error workaround:
+         * treat the first read id as a dummy one as the pre-condition,
+         * Send Read ID command again
+         */
+        psram_read_id(spi_num, &s_psram_id);
+        if (!PSRAM_IS_VALID(s_psram_id)) {
+            ESP_EARLY_LOGE(TAG, "PSRAM ID read error: 0x%08x", s_psram_id);
+            return ESP_FAIL;
+        }
     }
 
     psram_clk_mode_t clk_mode = PSRAM_CLK_MODE_MAX;
@@ -539,7 +541,6 @@ static void IRAM_ATTR psram_cache_init(psram_cache_mode_t psram_cache_mode, psra
     }
 #endif
 
-    Cache_Resume_DCache(0);
     CLEAR_PERI_REG_MASK(SPI_MEM_MISC_REG(0), SPI_MEM_CS1_DIS_M); //ENABLE SPI0 CS1 TO PSRAM(CS0--FLASH; CS1--SRAM)
 }
 #endif // CONFIG_SPIRAM

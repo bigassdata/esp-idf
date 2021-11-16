@@ -140,6 +140,14 @@ menu "SPI Flash driver"
                 given by ``chip_drv`` member of the chip struct. This adds support for variant
                 chips, however will extend detecting time.
 
+        config SPI_FLASH_SUPPORT_MXIC_CHIP
+            bool "MXIC"
+            default y
+            help
+                Enable this to support auto detection of MXIC chips if chip vendor not directly
+                given by ``chip_drv`` member of the chip struct. This adds support for variant
+                chips, however will extend detecting time.
+
         config SPI_FLASH_SUPPORT_GD_CHIP
             bool "GigaDevice"
             default y
@@ -154,5 +162,14 @@ menu "SPI Flash driver"
                 60H.
 
     endmenu #auto detect flash chips
+
+    config SPI_FLASH_ENABLE_ENCRYPTED_READ_WRITE
+        bool "Enable encrypted partition read/write operations"
+        default y
+        help
+            This option enables flash read/write operations to encrypted partition/s. This option
+            is kept enabled irrespective of state of flash encryption feature. However, in case
+            application is not using flash encryption feature and is in need of some additional
+            memory from IRAM region (~1KB) then this config can be disabled.
 
 endmenu

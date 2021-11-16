@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import shutil
 import subprocess
@@ -8,7 +9,7 @@ import click
 from idf_py_actions.constants import GENERATORS, SUPPORTED_TARGETS
 from idf_py_actions.errors import FatalError
 from idf_py_actions.global_options import global_options
-from idf_py_actions.tools import ensure_build_directory, idf_version, merge_action_lists, realpath, run_target
+from idf_py_actions.tools import ensure_build_directory, idf_version, merge_action_lists, realpath, run_target, TargetChoice
 
 
 def action_extensions(base_actions, project_path):
@@ -121,6 +122,20 @@ def action_extensions(base_actions, project_path):
             else:
                 os.remove(f)
 
+    def python_clean(action, ctx, args):
+        for root, dirnames, filenames in os.walk(os.environ["IDF_PATH"]):
+            for d in dirnames:
+                if d == "__pycache__":
+                    dir_to_delete = os.path.join(root, d)
+                    if args.verbose:
+                        print("Removing: %s" % dir_to_delete)
+                    shutil.rmtree(dir_to_delete)
+            for filename in fnmatch.filter(filenames, '*.py[co]'):
+                file_to_delete = os.path.join(root, filename)
+                if args.verbose:
+                    print("Removing: %s" % file_to_delete)
+                os.remove(file_to_delete)
+
     def set_target(action, ctx, args, idf_target):
         args.define_cache_entry.append("IDF_TARGET=" + idf_target)
         sdkconfig_path = os.path.join(args.project_dir, 'sdkconfig')
@@ -195,8 +210,10 @@ def action_extensions(base_actions, project_path):
                 "default": None,
             },
             {
-                "names": ["-n", "--no-warnings"],
-                "help": "Disable Cmake warnings.",
+                "names": ["-w/-n", "--cmake-warn-uninitialized/--no-warnings"],
+                "help": ("Enable CMake uninitialized variable warnings for CMake files inside the project directory. "
+                         "(--no-warnings is now the default, and doesn't need to be specified.)"),
+                "envvar": "IDF_CMAKE_WARN_UNINITIALIZED",
                 "is_flag": True,
                 "default": False,
             },
@@ -311,13 +328,13 @@ def action_extensions(base_actions, project_path):
             },
             "efuse_common_table": {
                 "callback": build_target,
-                "help": "Genereate C-source for IDF's eFuse fields.",
+                "help": "Generate C-source for IDF's eFuse fields.",
                 "order_dependencies": ["reconfigure"],
                 "options": global_options,
             },
             "efuse_custom_table": {
                 "callback": build_target,
-                "help": "Genereate C-source for user's eFuse fields.",
+                "help": "Generate C-source for user's eFuse fields.",
                 "order_dependencies": ["reconfigure"],
                 "options": global_options,
             },
@@ -379,7 +396,7 @@ def action_extensions(base_actions, project_path):
                     {
                         "names": ["idf-target"],
                         "nargs": 1,
-                        "type": click.Choice(SUPPORTED_TARGETS),
+                        "type": TargetChoice(SUPPORTED_TARGETS),
                     },
                 ],
                 "dependencies": ["fullclean"],
@@ -405,6 +422,14 @@ def action_extensions(base_actions, project_path):
                     "Note that this option recursively deletes all files "
                     "in the build directory, so use with care."
                     "Project configuration is not deleted.")
+            },
+            "python-clean": {
+                "callback": python_clean,
+                "short_help": "Delete generated Python byte code from the IDF directory",
+                "help": (
+                    "Delete generated Python byte code from the IDF directory "
+                    "which may cause issues when switching between IDF and Python versions. "
+                    "It is advised to run this target after switching versions.")
             },
         }
     }

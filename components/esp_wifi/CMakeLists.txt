@@ -26,8 +26,8 @@ idf_component_register(SRCS "src/coexist.c"
                             "src/wifi_netif.c"
                             "${idf_target}/esp_adapter.c"
                     INCLUDE_DIRS "include" "${idf_target}/include"
+                    PRIV_REQUIRES wpa_supplicant nvs_flash esp_netif driver ${extra_priv_requires}
                     REQUIRES esp_event
-                    PRIV_REQUIRES wpa_supplicant nvs_flash esp_netif ${extra_priv_requires}
                     LDFRAGMENTS "${ldfragments}")
 
 idf_build_get_property(build_dir BUILD_DIR)
@@ -83,18 +83,7 @@ if(CONFIG_ESP32_PHY_INIT_DATA_IN_PARTITION)
         idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
     endif()
 
-    # ToDo: remove once MP chip is supported
-    if(CONFIG_IDF_TARGET_ESP32)
-        set(phy_name "phy")
-    elseif(CONFIG_IDF_TARGET_ESP32S2)
-        if(CONFIG_ESP32S2_VERSION_A)
-            set(phy_name "phyA")
-        elseif(CONFIG_ESP32S2_VERSION_B)
-            set(phy_name "phyB")
-        elseif(CONFIG_ESP32S2_VERSION_MARLIN3)
-            set(phy_name "phy_marlin3")
-        endif()
-    endif()
+    set(phy_name "phy")
 
     esptool_py_flash_target(${phy_name}-flash "${main_args}" "${sub_args}")
     esptool_py_flash_target_image(${phy_name}-flash ${phy_name} "${phy_partition_offset}" "${phy_init_data_bin}")

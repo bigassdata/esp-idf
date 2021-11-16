@@ -73,6 +73,17 @@ esp_netif_t *_mdns_get_esp_netif(mdns_if_t tcpip_if)
     return NULL;
 }
 
+
+/*
+ * @brief Clean internal mdns interface's pointer
+ */
+static inline void _mdns_clean_netif_ptr(mdns_if_t tcpip_if) {
+    if (tcpip_if < MDNS_IF_MAX) {
+        s_esp_netifs[tcpip_if] = NULL;
+    }
+}
+
+
 /*
  * @brief  Convert esp-netif handle to mdns if
  */
@@ -980,6 +991,7 @@ static void _mdns_dispatch_tx_packet(mdns_tx_packet_t * p)
     uint8_t count;
 
     _mdns_set_u16(packet, MDNS_HEAD_FLAGS_OFFSET, p->flags);
+    _mdns_set_u16(packet, MDNS_HEAD_ID_OFFSET, p->id);
 
     count = 0;
     q = p->questions;
@@ -1259,6 +1271,7 @@ static void _mdns_create_answer_from_parsed_packet(mdns_parsed_packet_t * parsed
     }
     packet->flags = MDNS_FLAGS_AUTHORITATIVE;
     packet->distributed = parsed_packet->distributed;
+    packet->id = parsed_packet->id;
 
     mdns_parsed_question_t * q = parsed_packet->questions;
     while (q) {
@@ -1311,6 +1324,19 @@ static void _mdns_create_answer_from_parsed_packet(mdns_parsed_packet_t * parsed
                     _mdns_free_tx_packet(packet);
                     return;
                 }
+#ifdef MDNS_REPEAT_QUERY_IN_RESPONSE
+                if (parsed_packet->src_port != MDNS_SERVICE_PORT) {
+                    mdns_out_question_t * out_question = malloc(sizeof(mdns_out_question_t));
+                    if (out_question == NULL) {
+                        HOOK_MALLOC_FAILED;
+                        _mdns_free_tx_packet(packet);
+                        return;
+                    }
+                    memcpy(out_question, q, sizeof(mdns_out_question_t));
+                    out_question->next = NULL;
+                    queueToEnd(mdns_out_question_t, packet->questions, out_question);
+                }
+#endif // MDNS_REPEAT_QUERY_IN_RESPONSE
             } else if (!_mdns_alloc_answer(&packet->answers, q->type, NULL, send_flush, false)) {
                 _mdns_free_tx_packet(packet);
                 return;
@@ -2134,7 +2160,7 @@ static int _mdns_check_srv_collision(mdns_service_t * service, uint16_t priority
  */
 static int _mdns_check_txt_collision(mdns_service_t * service, const uint8_t * data, size_t len)
 {
-    size_t data_len = 1;
+    size_t data_len = 0;
     if (len == 1 && service->txt) {
         return -1;//we win
     } else if (len > 1 && !service->txt) {
@@ -2145,7 +2171,7 @@ static int _mdns_check_txt_collision(mdns_service_t * service, const uint8_t * d
 
     mdns_txt_linked_item_t * txt = service->txt;
     while (txt) {
-        data_len += 2 + strlen(service->txt->key) + strlen(service->txt->value);
+        data_len += 2 + strlen(txt->key) + strlen(txt->value);
         txt = txt->next;
     }
 
@@ -2652,7 +2678,7 @@ void mdns_parse_packet(mdns_rx_packet_t * packet)
     }
 
     //if we have not set the hostname, we can not answer questions
-    if (header.questions && _str_null_or_empty(_mdns_server->hostname)) {
+    if (header.questions && !header.answers && _str_null_or_empty(_mdns_server->hostname)) {
         free(parsed_packet);
         return;
     }
@@ -2662,6 +2688,7 @@ void mdns_parse_packet(mdns_rx_packet_t * packet)
     parsed_packet->multicast = packet->multicast;
     parsed_packet->authoritative = header.flags.value == MDNS_FLAGS_AUTHORITATIVE;
     parsed_packet->distributed = header.flags.value == MDNS_FLAGS_DISTRIBUTED;
+    parsed_packet->id = header.id;
     ip_addr_copy(parsed_packet->src, packet->src);
     parsed_packet->src_port = packet->src_port;
 
@@ -2739,7 +2766,7 @@ void mdns_parse_packet(mdns_rx_packet_t * packet)
         }
     }
 
-    if (header.questions && !parsed_packet->questions && !parsed_packet->discovery) {
+    if (header.questions && !parsed_packet->questions && !parsed_packet->discovery && !header.answers) {
         goto clear_rx_packet;
     } else if (header.answers || header.servers || header.additional) {
         uint16_t recordIndex = 0;
@@ -2788,7 +2815,7 @@ void mdns_parse_packet(mdns_rx_packet_t * packet)
                     service = _mdns_get_service_item(name->service, name->proto);
                 }
             } else {
-                if (header.questions || !parsed_packet->authoritative || record_type == MDNS_NS) {
+                if (!parsed_packet->authoritative || record_type == MDNS_NS) {
                     //skip this record
                     continue;
                 }
@@ -3096,6 +3123,8 @@ void _mdns_enable_pcb(mdns_if_t tcpip_if, mdns_ip_protocol_t ip_protocol)
  */
 void _mdns_disable_pcb(mdns_if_t tcpip_if, mdns_ip_protocol_t ip_protocol)
 {
+    _mdns_clean_netif_ptr(tcpip_if);
+
     if (_mdns_server->interfaces[tcpip_if].pcbs[ip_protocol].pcb) {
         _mdns_clear_pcb_tx_queue_head(tcpip_if, ip_protocol);
         _mdns_pcb_deinit(tcpip_if, ip_protocol);

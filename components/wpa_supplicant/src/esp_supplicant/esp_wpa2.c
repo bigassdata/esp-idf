@@ -194,10 +194,6 @@ void wpa2_task(void *pvParameters )
 
     for (;;) {
         if ( pdPASS == xQueueReceive(s_wpa2_queue, &e, portMAX_DELAY) ) {
-#ifdef DEBUG_PRINT
-            uint32_t sig = 0;
-            sig = e->sig;
-#endif
             if (e->sig < SIG_WPA2_MAX) {
                 DATA_MUTEX_TAKE();
                 if(sm->wpa2_sig_cnt[e->sig]) {
@@ -234,7 +230,7 @@ void wpa2_task(void *pvParameters )
             break;
         } else {
             if (s_wifi_wpa2_sync_sem) {
-                wpa_printf(MSG_DEBUG, "WPA2: wifi->wpa2 api completed sig(%d)", sig);
+                wpa_printf(MSG_DEBUG, "WPA2: wifi->wpa2 api completed sig(%d)", e->sig);
                 xSemaphoreGive(s_wifi_wpa2_sync_sem);
             } else {
                 wpa_printf(MSG_ERROR, "WPA2: null wifi->wpa2 sync sem");
@@ -247,7 +243,7 @@ void wpa2_task(void *pvParameters )
     wpa_printf(MSG_DEBUG, "WPA2: task deleted");
     s_wpa2_queue = NULL;
     if (s_wifi_wpa2_sync_sem) {
-        wpa_printf(MSG_DEBUG, "WPA2: wifi->wpa2 api completed sig(%d)", sig);
+        wpa_printf(MSG_DEBUG, "WPA2: wifi->wpa2 api completed sig(%d)", e->sig);
         xSemaphoreGive(s_wifi_wpa2_sync_sem);
     } else {
         wpa_printf(MSG_ERROR, "WPA2: null wifi->wpa2 sync sem");
@@ -698,7 +694,8 @@ static int wpa2_start_eapol_internal(void)
     if (!sm) {
         return ESP_FAIL;
     }
-    if (wpa_sta_is_cur_pmksa_set()) {
+
+    if (wpa_sta_cur_pmksa_matches_akm()) {
         wpa_printf(MSG_DEBUG,
                 "RSN: PMKSA caching - do not send EAPOL-Start");
         return ESP_FAIL;
@@ -752,8 +749,9 @@ static int eap_peer_sm_init(void)
 
     s_wpa2_data_lock = xSemaphoreCreateRecursiveMutex();
     if (!s_wpa2_data_lock) {
+	free(sm);
         wpa_printf(MSG_ERROR, "wpa2 eap_peer_sm_init: failed to alloc data lock");
-        return ESP_ERR_NO_MEM;
+	return ESP_ERR_NO_MEM;
     }
 
     wpa2_set_eap_state(WPA2_ENT_EAP_STATE_NOT_START);
@@ -763,6 +761,7 @@ static int eap_peer_sm_init(void)
     if (ret) {
         wpa_printf(MSG_ERROR, "eap_peer_blob_init failed\n");
         os_free(sm);
+        vSemaphoreDelete(s_wpa2_data_lock);
         return ESP_FAIL;
     }
 
@@ -771,6 +770,7 @@ static int eap_peer_sm_init(void)
         wpa_printf(MSG_ERROR, "eap_peer_config_init failed\n");
         eap_peer_blob_deinit(sm);
         os_free(sm);
+        vSemaphoreDelete(s_wpa2_data_lock);
         return ESP_FAIL;
     }
 
@@ -781,6 +781,7 @@ static int eap_peer_sm_init(void)
         eap_peer_blob_deinit(sm);
         eap_peer_config_deinit(sm);
         os_free(sm);
+        vSemaphoreDelete(s_wpa2_data_lock);
         return ESP_FAIL;
     }
 
@@ -792,6 +793,12 @@ static int eap_peer_sm_init(void)
     xTaskCreate(wpa2_task, "wpa2T", WPA2_TASK_STACK_SIZE, NULL, 2, s_wpa2_task_hdl);
     s_wifi_wpa2_sync_sem = xSemaphoreCreateCounting(1, 0);
     if (!s_wifi_wpa2_sync_sem) {
+        vQueueDelete(s_wpa2_queue);
+        s_wpa2_queue = NULL;
+        eap_peer_blob_deinit(sm);
+        eap_peer_config_deinit(sm);
+        os_free(sm);
+        vSemaphoreDelete(s_wpa2_data_lock);
         wpa_printf(MSG_ERROR, "WPA2: failed create wifi wpa2 task sync sem");
         return ESP_FAIL;
     }

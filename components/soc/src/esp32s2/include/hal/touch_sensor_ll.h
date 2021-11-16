@@ -26,11 +26,20 @@
 #include <stdbool.h>
 #include "soc/touch_sensor_periph.h"
 #include "hal/touch_sensor_types.h"
+#include "soc/sens_struct.h"
+#include "soc/rtc_io_struct.h"
+#include "soc/rtc_cntl_struct.h"
+#include "hal/hal_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define TOUCH_LL_READ_RAW           0x0
+#define TOUCH_LL_READ_BENCHMARK      0x2
+#define TOUCH_LL_READ_SMOOTH        0x3
+#define TOUCH_LL_TIMER_FORCE_DONE   0x3
+#define TOUCH_LL_TIMER_DONE         0x0
 
 /**
  * Set touch sensor touch sensor times of charge and discharge.
@@ -41,9 +50,9 @@ extern "C" {
 static inline void touch_ll_set_meas_times(uint16_t meas_time)
 {
     //The times of charge and discharge in each measure process of touch channels.
-    RTCCNTL.touch_ctrl1.touch_meas_num = meas_time;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(RTCCNTL.touch_ctrl1, touch_meas_num, meas_time);
     //the waiting cycles (in 8MHz) between TOUCH_START and TOUCH_XPD
-    RTCCNTL.touch_ctrl2.touch_xpd_wait = SOC_TOUCH_PAD_MEASURE_WAIT; //wait volt stable
+    HAL_FORCE_MODIFY_U32_REG_FIELD(RTCCNTL.touch_ctrl2, touch_xpd_wait, SOC_TOUCH_PAD_MEASURE_WAIT); //wait volt stable
 }
 
 /**
@@ -53,7 +62,7 @@ static inline void touch_ll_set_meas_times(uint16_t meas_time)
  */
 static inline void touch_ll_get_measure_times(uint16_t *meas_time)
 {
-    *meas_time = RTCCNTL.touch_ctrl1.touch_meas_num;
+    *meas_time = HAL_FORCE_READ_U32_REG_FIELD(RTCCNTL.touch_ctrl1, touch_meas_num);
 }
 
 /**
@@ -67,7 +76,7 @@ static inline void touch_ll_get_measure_times(uint16_t *meas_time)
 static inline void touch_ll_set_sleep_time(uint16_t sleep_time)
 {
     // touch sensor sleep cycle Time = sleep_cycle / RTC_SLOW_CLK(90k)
-    RTCCNTL.touch_ctrl1.touch_sleep_cycles = sleep_time;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(RTCCNTL.touch_ctrl1, touch_sleep_cycles, sleep_time);
 }
 
 /**
@@ -77,7 +86,7 @@ static inline void touch_ll_set_sleep_time(uint16_t sleep_time)
  */
 static inline void touch_ll_get_sleep_time(uint16_t *sleep_time)
 {
-    *sleep_time = RTCCNTL.touch_ctrl1.touch_sleep_cycles;
+    *sleep_time = HAL_FORCE_READ_U32_REG_FIELD(RTCCNTL.touch_ctrl1, touch_sleep_cycles);
 }
 
 /**
@@ -227,28 +236,72 @@ static inline void touch_ll_get_fsm_mode(touch_fsm_mode_t *mode)
 }
 
 /**
+ * Enable/disable clock gate of touch sensor.
+ *
+ * @param enable true/false.
+ */
+static inline void touch_ll_clkgate(bool enable)
+{
+    RTCCNTL.touch_ctrl2.touch_clkgate_en = enable; //enable touch clock for FSM. or force enable.
+}
+
+/**
+ * Get touch sensor FSM state.
+ * @return
+ *          - true: fsm state is open.
+ *          - false: fsm state is close.
+ */
+static inline bool touch_ll_clkgate_get_state(void)
+{
+    return RTCCNTL.touch_ctrl2.touch_clkgate_en;
+}
+
+/**
+ * Touch timer trigger measurement and always wait measurement done.
+ * Force done for touch timer ensures that the timer always can get the measurement done signal.
+ */
+static inline void touch_ll_timer_force_done(void)
+{
+    RTCCNTL.touch_ctrl2.touch_timer_force_done = TOUCH_LL_TIMER_FORCE_DONE;
+    RTCCNTL.touch_ctrl2.touch_timer_force_done = TOUCH_LL_TIMER_DONE;
+}
+
+/**
  * Start touch sensor FSM timer.
  *        The measurement action can be triggered by the hardware timer, as well as by the software instruction.
- *
- * @param mode FSM mode.
  */
 static inline void touch_ll_start_fsm(void)
 {
-    RTCCNTL.touch_ctrl2.touch_clkgate_en = 1; //enable touch clock for FSM. or force enable.
+    /**
+     * Touch timer trigger measurement and always wait measurement done.
+     * Force done for touch timer ensures that the timer always can get the measurement done signal.
+     */
+    RTCCNTL.touch_ctrl2.touch_timer_force_done = TOUCH_LL_TIMER_FORCE_DONE;
+    RTCCNTL.touch_ctrl2.touch_timer_force_done = TOUCH_LL_TIMER_DONE;
     RTCCNTL.touch_ctrl2.touch_slp_timer_en = (RTCCNTL.touch_ctrl2.touch_start_force == TOUCH_FSM_MODE_TIMER ? 1 : 0);
 }
 
 /**
  * Stop touch sensor FSM timer.
  *        The measurement action can be triggered by the hardware timer, as well as by the software instruction.
- *
- * @param mode FSM mode.
  */
 static inline void touch_ll_stop_fsm(void)
 {
     RTCCNTL.touch_ctrl2.touch_start_en = 0; //stop touch fsm
     RTCCNTL.touch_ctrl2.touch_slp_timer_en = 0;
-    RTCCNTL.touch_ctrl2.touch_clkgate_en = 0; //enable touch clock for FSM. or force enable.
+    RTCCNTL.touch_ctrl2.touch_timer_force_done = TOUCH_LL_TIMER_FORCE_DONE;
+    RTCCNTL.touch_ctrl2.touch_timer_force_done = TOUCH_LL_TIMER_DONE;
+}
+
+/**
+ * Get touch sensor FSM timer state.
+ * @return
+ *     - true: FSM enabled
+ *     - false: FSM disabled
+ */
+static inline bool touch_ll_get_fsm_state(void)
+{
+    return (bool)RTCCNTL.touch_ctrl2.touch_slp_timer_en;
 }
 
 /**
@@ -261,17 +314,11 @@ static inline void touch_ll_start_sw_meas(void)
 }
 
 /**
- * Set touch sensor interrupt threshold.
- *
- * @param touch_num touch pad index.
- * @param threshold threshold of touchpad count.
- */
-/**
  * Set the trigger threshold of touch sensor.
  * The threshold determines the sensitivity of the touch sensor.
- * The threshold is the original value of the trigger state minus the baseline value.
+ * The threshold is the original value of the trigger state minus the benchmark value.
  *
- * @note  If set "TOUCH_PAD_THRESHOLD_MAX", the touch is never be trigered.
+ * @note  If set "TOUCH_PAD_THRESHOLD_MAX", the touch is never be triggered.
  * @param touch_num touch pad index
  * @param threshold threshold of touch sensor.
  */
@@ -283,7 +330,7 @@ static inline void touch_ll_set_threshold(touch_pad_t touch_num, uint32_t thresh
 /**
  * Get the trigger threshold of touch sensor.
  * The threshold determines the sensitivity of the touch sensor.
- * The threshold is the original value of the trigger state minus the baseline value.
+ * The threshold is the original value of the trigger state minus the benchmark value.
  *
  * @param touch_num touch pad index.
  * @param threshold pointer to accept threshold.
@@ -357,46 +404,15 @@ static inline void touch_ll_clear_trigger_status_mask(void)
 }
 
 /**
- * To enable touch pad interrupt.
- */
-static inline void touch_ll_enable_interrupt(touch_pad_intr_mask_t int_mask)
-{
-    if (int_mask & TOUCH_PAD_INTR_MASK_DONE) {
-        RTCCNTL.int_ena.rtc_touch_done = 1;
-    }
-    if (int_mask & TOUCH_PAD_INTR_MASK_ACTIVE) {
-        RTCCNTL.int_ena.rtc_touch_active = 1;
-    }
-    if (int_mask & TOUCH_PAD_INTR_MASK_INACTIVE) {
-        RTCCNTL.int_ena.rtc_touch_inactive = 1;
-    }
-}
-
-/**
- * To disable touch pad interrupt.
- */
-static inline void touch_ll_disable_interrupt(touch_pad_intr_mask_t int_mask)
-{
-    if (int_mask & TOUCH_PAD_INTR_MASK_DONE) {
-        RTCCNTL.int_ena.rtc_touch_done = 0;
-    }
-    if (int_mask & TOUCH_PAD_INTR_MASK_ACTIVE) {
-        RTCCNTL.int_ena.rtc_touch_active = 0;
-    }
-    if (int_mask & TOUCH_PAD_INTR_MASK_INACTIVE) {
-        RTCCNTL.int_ena.rtc_touch_inactive = 0;
-    }
-}
-
-/**
  * Get touch sensor raw data (touch sensor counter value) from register. No block.
  *
  * @param touch_num touch pad index.
  * @return touch_value pointer to accept touch sensor value.
  */
-static inline uint32_t touch_ll_read_raw_data(touch_pad_t touch_num)
+static inline uint32_t IRAM_ATTR touch_ll_read_raw_data(touch_pad_t touch_num)
 {
-    return SENS.touch_meas[touch_num].meas_out;
+    SENS.sar_touch_conf.touch_data_sel = TOUCH_LL_READ_RAW;
+    return SENS.sar_touch_status[touch_num - 1].touch_pad_data;
 }
 
 /**
@@ -415,12 +431,13 @@ static inline bool touch_ll_meas_is_done(void)
 /**
  * Reset the whole of touch module.
  *
- * @note Call this funtion after `touch_pad_fsm_stop`,
+ * @note Call this function after `touch_pad_fsm_stop`.
  */
 static inline void touch_ll_reset(void)
 {
     RTCCNTL.touch_ctrl2.touch_reset = 0;
     RTCCNTL.touch_ctrl2.touch_reset = 1;
+    RTCCNTL.touch_ctrl2.touch_reset = 0;    // Should be set 0.
 }
 
 /**
@@ -433,7 +450,7 @@ static inline void touch_ll_reset(void)
  *
  * @param type  Select idle channel connect to high resistance state or ground.
  */
-static inline void touch_ll_set_inactive_connect(touch_pad_conn_type_t type)
+static inline void touch_ll_set_idle_channel_connect(touch_pad_conn_type_t type)
 {
     RTCCNTL.touch_scan_ctrl.touch_inactive_connection = type;
 }
@@ -448,7 +465,7 @@ static inline void touch_ll_set_inactive_connect(touch_pad_conn_type_t type)
  *
  * @param type  Select idle channel connect to high resistance state or ground.
  */
-static inline void touch_ll_get_inactive_connect(touch_pad_conn_type_t *type)
+static inline void touch_ll_get_idle_channel_connect(touch_pad_conn_type_t *type)
 {
     *type = RTCCNTL.touch_scan_ctrl.touch_inactive_connection;
 }
@@ -459,7 +476,7 @@ static inline void touch_ll_get_inactive_connect(touch_pad_conn_type_t *type)
  * @return
  *      - touch channel number
  */
-static inline touch_pad_t touch_ll_get_current_meas_channel(void)
+static inline touch_pad_t IRAM_ATTR touch_ll_get_current_meas_channel(void)
 {
     return (touch_pad_t)(SENS.sar_touch_status0.touch_scan_curr);
 }
@@ -480,6 +497,12 @@ static inline void touch_ll_intr_enable(touch_pad_intr_mask_t int_mask)
     if (int_mask & TOUCH_PAD_INTR_MASK_INACTIVE) {
         RTCCNTL.int_ena.rtc_touch_inactive = 1;
     }
+    if (int_mask & TOUCH_PAD_INTR_MASK_SCAN_DONE) {
+        RTCCNTL.int_ena.rtc_touch_scan_done = 1;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_TIMEOUT) {
+        RTCCNTL.int_ena.rtc_touch_timeout = 1;
+    }
 }
 
 /**
@@ -497,6 +520,36 @@ static inline void touch_ll_intr_disable(touch_pad_intr_mask_t int_mask)
     }
     if (int_mask & TOUCH_PAD_INTR_MASK_INACTIVE) {
         RTCCNTL.int_ena.rtc_touch_inactive = 0;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_SCAN_DONE) {
+        RTCCNTL.int_ena.rtc_touch_scan_done = 0;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_TIMEOUT) {
+        RTCCNTL.int_ena.rtc_touch_timeout = 0;
+    }
+}
+
+/**
+ * Clear touch sensor interrupt by bitmask.
+ *
+ * @param int_mask Pad mask to clear interrupts
+ */
+static inline void touch_ll_intr_clear(touch_pad_intr_mask_t int_mask)
+{
+    if (int_mask & TOUCH_PAD_INTR_MASK_DONE) {
+        RTCCNTL.int_clr.rtc_touch_done = 1;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_ACTIVE) {
+        RTCCNTL.int_clr.rtc_touch_active = 1;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_INACTIVE) {
+        RTCCNTL.int_clr.rtc_touch_inactive = 1;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_SCAN_DONE) {
+        RTCCNTL.int_clr.rtc_touch_scan_done = 1;
+    }
+    if (int_mask & TOUCH_PAD_INTR_MASK_TIMEOUT) {
+        RTCCNTL.int_clr.rtc_touch_timeout = 1;
     }
 }
 
@@ -519,32 +572,101 @@ static inline uint32_t touch_ll_read_intr_status_mask(void)
     if (intr_st & RTC_CNTL_TOUCH_INACTIVE_INT_ST_M) {
         intr_msk |= TOUCH_PAD_INTR_MASK_INACTIVE;
     }
-
+    if (intr_st & RTC_CNTL_TOUCH_SCAN_DONE_INT_ST_M) {
+        intr_msk |= TOUCH_PAD_INTR_MASK_SCAN_DONE;
+    }
+    if (intr_st & RTC_CNTL_TOUCH_TIMEOUT_INT_ST_M) {
+        intr_msk |= TOUCH_PAD_INTR_MASK_TIMEOUT;
+    }
     return (intr_msk & TOUCH_PAD_INTR_MASK_ALL);
+}
+
+/**
+ * Enable the timeout check for all touch sensor channels measurements.
+ * When the touch reading of a touch channel exceeds the measurement threshold,
+ * If enable: a timeout interrupt will be generated and it will go to the next channel measurement.
+ * If disable: the FSM is always on the channel, until the measurement of this channel is over.
+ *
+ * @note Set the timeout threshold correctly before enabling it.
+ */
+static inline void touch_ll_timeout_enable(void)
+{
+    RTCCNTL.touch_timeout_ctrl.touch_timeout_en = 1;
+}
+
+/**
+ * Disable the timeout check for all touch sensor channels measurements.
+ * When the touch reading of a touch channel exceeds the measurement threshold,
+ * If enable: a timeout interrupt will be generated and it will go to the next channel measurement.
+ * If disable: the FSM is always on the channel, until the measurement of this channel is over.
+ *
+ * @note Set the timeout threshold correctly before enabling it.
+ */
+static inline void touch_ll_timeout_disable(void)
+{
+    RTCCNTL.touch_timeout_ctrl.touch_timeout_en = 0;
+}
+
+/**
+ * Set timeout threshold for all touch sensor channels measurements.
+ * Compared with touch readings.
+ *
+ * @param threshold Set to the maximum time measured on one channel.
+ */
+static inline void touch_ll_timeout_set_threshold(uint32_t threshold)
+{
+    RTCCNTL.touch_timeout_ctrl.touch_timeout_num = threshold;
+}
+
+/**
+ * Get timeout threshold for all touch sensor channels measurements.
+ * Compared with touch readings.
+ *
+ * @param threshold Point to timeout threshold.
+ */
+static inline void touch_ll_timeout_get_threshold(uint32_t *threshold)
+{
+    *threshold = RTCCNTL.touch_timeout_ctrl.touch_timeout_num;
 }
 
 /************************ Filter register setting ************************/
 
 /**
- * Get baseline value of touch sensor.
+ * Get smoothed data that obtained by filtering the raw data.
  *
- * @note After initialization, the baseline value is the maximum during the first measurement period.
  * @param touch_num touch pad index
- * @param touch_value pointer to accept touch sensor value
+ * @param smooth_data pointer to smoothed data
  */
-static inline void touch_ll_filter_read_baseline(touch_pad_t touch_num, uint32_t *basedata)
+static inline void IRAM_ATTR touch_ll_filter_read_smooth(touch_pad_t touch_num, uint32_t *smooth_data)
 {
-    *basedata = SENS.sar_touch_status[touch_num - 1].touch_pad_baseline;
+    SENS.sar_touch_conf.touch_data_sel = TOUCH_LL_READ_SMOOTH;
+    *smooth_data = SENS.sar_touch_status[touch_num - 1].touch_pad_data;
 }
 
 /**
- * Force reset baseline to raw data of touch sensor.
+ * Get benchmark value of touch sensor.
  *
+ * @note After initialization, the benchmark value is the maximum during the first measurement period.
+ * @param touch_num touch pad index
+ * @param touch_value pointer to accept touch sensor value
+ */
+static inline void IRAM_ATTR touch_ll_read_benchmark(touch_pad_t touch_num, uint32_t *benchmark)
+{
+    SENS.sar_touch_conf.touch_data_sel = TOUCH_LL_READ_BENCHMARK;
+    *benchmark = SENS.sar_touch_status[touch_num - 1].touch_pad_data;
+}
+
+/**
+ * Force reset benchmark to raw data of touch sensor.
+ *
+ * @note If call this API, make sure enable clock gate(`touch_ll_clkgate`) first.
  * @param touch_num touch pad index
  *                  - TOUCH_PAD_MAX Reset basaline of all channels.
  */
-static inline void touch_ll_filter_reset_baseline(touch_pad_t touch_num)
+static inline void touch_ll_reset_benchmark(touch_pad_t touch_num)
 {
+    /* Clear touch channels to initialize the channel value (benchmark, raw_data).
+     */
     if (touch_num == TOUCH_PAD_MAX) {
         SENS.sar_touch_chn_st.touch_channel_clr = SOC_TOUCH_SENSOR_BIT_MASK_MAX;
     } else {
@@ -553,10 +675,10 @@ static inline void touch_ll_filter_reset_baseline(touch_pad_t touch_num)
 }
 
 /**
- * Set filter mode. The input to the filter is raw data and the output is the baseline value.
- * Larger filter coefficients increase the stability of the baseline.
+ * Set filter mode. The input of the filter is the raw value of touch reading,
+ * and the output of the filter is involved in the judgment of the touch state.
  *
- * @param mode Filter mode type. Refer to `touch_filter_mode_t`.
+ * @param mode Filter mode type. Refer to ``touch_filter_mode_t``.
  */
 static inline void touch_ll_filter_set_filter_mode(touch_filter_mode_t mode)
 {
@@ -564,9 +686,10 @@ static inline void touch_ll_filter_set_filter_mode(touch_filter_mode_t mode)
 }
 
 /**
- * Get filter mode. The input to the filter is raw data and the output is the baseline value.
+ * Get filter mode. The input of the filter is the raw value of touch reading,
+ * and the output of the filter is involved in the judgment of the touch state.
  *
- * @param mode Filter mode type. Refer to `touch_filter_mode_t`.
+ * @param mode Filter mode type. Refer to ``touch_filter_mode_t``.
  */
 static inline void touch_ll_filter_get_filter_mode(touch_filter_mode_t *mode)
 {
@@ -574,8 +697,29 @@ static inline void touch_ll_filter_get_filter_mode(touch_filter_mode_t *mode)
 }
 
 /**
+ * Set filter mode. The input to the filter is raw data and the output is the smooth data.
+ * The smooth data is used to determine the touch status.
+ *
+ * @param mode Filter mode type. Refer to ``touch_smooth_mode_t``.
+ */
+static inline void touch_ll_filter_set_smooth_mode(touch_smooth_mode_t mode)
+{
+    RTCCNTL.touch_filter_ctrl.touch_smooth_lvl = mode;
+}
+
+/**
+ * Get filter mode. The smooth data is used to determine the touch status.
+ *
+ * @param mode Filter mode type. Refer to ``touch_smooth_mode_t``.
+ */
+static inline void touch_ll_filter_get_smooth_mode(touch_smooth_mode_t *mode)
+{
+    *mode = RTCCNTL.touch_filter_ctrl.touch_smooth_lvl;
+}
+
+/**
  * Set debounce count, such as `n`. If the measured values continue to exceed
- * the threshold for `n` times, it is determined that the touch sensor state changes.
+ * the threshold for `n+1` times, it is determined that the touch sensor state changes.
  *
  * @param dbc_cnt Debounce count value.
  */
@@ -595,49 +739,24 @@ static inline void touch_ll_filter_get_debounce(uint32_t *dbc_cnt)
 }
 
 /**
- * Set hysteresis threshold coefficient. hysteresis = hysteresis_thr * touch_threshold.
- * If (raw data - baseline) > (touch threshold + hysteresis), the touch channel be touched.
- * If (raw data - baseline) < (touch threshold - hysteresis), the touch channel be released.
- * Range: 0 ~ 3. The coefficient is 0: 1/8;  1: 3/32;  2: 1/16;  3: 1/32
- *
- * @param hys_thr hysteresis coefficient.
- */
-static inline void touch_ll_filter_set_hysteresis(uint32_t hys_thr)
-{
-    RTCCNTL.touch_filter_ctrl.touch_hysteresis = hys_thr;
-}
-
-/**
- * Get hysteresis threshold coefficient. hysteresis = hysteresis_thr * touch_threshold.
- * If (raw data - baseline) > (touch threshold + hysteresis), the touch channel be touched.
- * If (raw data - baseline) < (touch threshold - hysteresis), the touch channel be released.
- * Range: 0 ~ 3. The coefficient is 0: 1/8;  1: 3/32;  2: 1/16;  3: 1/32
- *
- * @param hys_thr hysteresis coefficient.
- */
-static inline void touch_ll_filter_get_hysteresis(uint32_t *hys_thr)
-{
-    *hys_thr = RTCCNTL.touch_filter_ctrl.touch_hysteresis;
-}
-
-/**
- * Set noise threshold coefficient. noise = noise_thr * touch threshold.
- * If (raw data - baseline) > (noise), the baseline stop updating.
- * If (raw data - baseline) < (noise), the baseline start updating.
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
+ * Set noise threshold coefficient. Higher = More noise resistance.
+ * The actual noise should be less than (noise coefficient * touch threshold).
+ * Range: 0 ~ 3. The coefficient is 0: 4/8;  1: 3/8;   2: 2/8;   3: 1;
  *
  * @param hys_thr Noise threshold coefficient.
  */
 static inline void touch_ll_filter_set_noise_thres(uint32_t noise_thr)
 {
     RTCCNTL.touch_filter_ctrl.touch_noise_thres = noise_thr;
+    RTCCNTL.touch_filter_ctrl.config2 = noise_thr;
+    RTCCNTL.touch_filter_ctrl.config1 = 0xF;
+    RTCCNTL.touch_filter_ctrl.config3 = 2;
 }
 
 /**
- * Get noise threshold coefficient. noise = noise_thr * touch threshold.
- * If (raw data - baseline) > (noise), the baseline stop updating.
- * If (raw data - baseline) < (noise), the baseline start updating.
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
+ * Get noise threshold coefficient. Higher = More noise resistance.
+ * The actual noise should be less than (noise coefficient * touch threshold).
+ * Range: 0 ~ 3. The coefficient is 0: 4/8;  1: 3/8;   2: 2/8;   3: 1;
  *
  * @param noise_thr Noise threshold coefficient.
  */
@@ -647,61 +766,11 @@ static inline void touch_ll_filter_get_noise_thres(uint32_t *noise_thr)
 }
 
 /**
- * Set negative noise threshold coefficient. negative noise = noise_neg_thr * touch threshold.
- * If (baseline - raw data) > (negative noise), the baseline restart reset process(refer to `baseline_reset`).
- * If (baseline - raw data) < (negative noise), the baseline stop reset process(refer to `baseline_reset`).
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
- *
- * @param noise_thr Negative threshold coefficient.
- */
-static inline void touch_ll_filter_set_neg_noise_thres(uint32_t noise_thr)
-{
-    RTCCNTL.touch_filter_ctrl.touch_neg_noise_thres = noise_thr;
-}
-
-/**
- * Get negative noise threshold coefficient. negative noise = noise_neg_thr * touch threshold.
- * If (baseline - raw data) > (negative noise), the baseline restart reset process(refer to `baseline_reset`).
- * If (baseline - raw data) < (negative noise), the baseline stop reset process(refer to `baseline_reset`).
- * Range: 0 ~ 3. The coefficient is 0: 1/2;  1: 3/8;   2: 1/4;   3: 1/8;
- *
- * @param noise_thr Negative noise threshold coefficient.
- */
-static inline void touch_ll_filter_get_neg_noise_thres(uint32_t *noise_thr)
-{
-    *noise_thr = RTCCNTL.touch_filter_ctrl.touch_neg_noise_thres;
-}
-
-/**
- * Set the cumulative number of baseline reset processes. such as `n`. If the measured values continue to exceed
- * the negative noise threshold for `n` times, the baseline reset to raw data.
- * Range: 0 ~ 15
- *
- * @param reset_cnt The cumulative number of baseline reset processes.
- */
-static inline void touch_ll_filter_set_baseline_reset(uint32_t reset_cnt)
-{
-    RTCCNTL.touch_filter_ctrl.touch_neg_noise_limit = reset_cnt;
-}
-
-/**
- * Get the cumulative number of baseline reset processes. such as `n`. If the measured values continue to exceed
- * the negative noise threshold for `n` times, the baseline reset to raw data.
- * Range: 0 ~ 15
- *
- * @param reset_cnt The cumulative number of baseline reset processes.
- */
-static inline void touch_ll_filter_get_baseline_reset(uint32_t *reset_cnt)
-{
-    *reset_cnt = RTCCNTL.touch_filter_ctrl.touch_neg_noise_limit;
-}
-
-/**
  * Set jitter filter step size.
  * If filter mode is jitter, should set filter step for jitter.
  * Range: 0 ~ 15
  *
- * @param step The step size of the data change when the baseline is updated.
+ * @param step The step size of the data change.
  */
 static inline void touch_ll_filter_set_jitter_step(uint32_t step)
 {
@@ -713,7 +782,7 @@ static inline void touch_ll_filter_set_jitter_step(uint32_t step)
  * If filter mode is jitter, should set filter step for jitter.
  * Range: 0 ~ 15
  *
- * @param step The step size of the data change when the baseline is updated.
+ * @param step The step size of the data change.
  */
 static inline void touch_ll_filter_get_jitter_step(uint32_t *step)
 {
@@ -817,9 +886,9 @@ static inline void touch_ll_denoise_get_grade(touch_pad_denoise_grade_t *grade)
  *
  * @param denoise value of denoise.
  */
-static inline uint32_t touch_ll_denoise_read_data(uint32_t *data)
+static inline void touch_ll_denoise_read_data(uint32_t *data)
 {
-    return (uint32_t)SENS.sar_touch_status0.touch_denoise_data;
+    *data = SENS.sar_touch_status0.touch_denoise_data;
 }
 
 /************************ Waterproof register setting ************************/
@@ -870,11 +939,11 @@ static inline void touch_ll_waterproof_get_sheild_driver(touch_pad_shield_driver
 
 /**
  * Enable parameter of waterproof function.
+ *
  * The waterproof function includes a shielded channel (TOUCH_PAD_NUM14) and a guard channel.
- * The shielded channel outputs the same signal as the channel being measured.
+ * Guard pad is used to detect the large area of water covering the touch panel.
+ * Shield pad is used to shield the influence of water droplets covering the touch panel.
  * It is generally designed as a grid and is placed around the touch buttons.
- * The shielded channel does not follow the measurement signal of the protection channel.
- * So that the guard channel can detect a large area of water.
  */
 static inline void touch_ll_waterproof_enable(void)
 {
@@ -883,11 +952,6 @@ static inline void touch_ll_waterproof_enable(void)
 
 /**
  * Disable parameter of waterproof function.
- * The waterproof function includes a shielded channel (TOUCH_PAD_NUM14) and a guard channel.
- * The shielded channel outputs the same signal as the channel being measured.
- * It is generally designed as a grid and is placed around the touch buttons.
- * The shielded channel does not follow the measurement signal of the protection channel.
- * So that the guard channel can detect a large area of water.
  */
 static inline void touch_ll_waterproof_disable(void)
 {
@@ -929,7 +993,7 @@ static inline void touch_ll_proximity_get_channel_num(touch_pad_t prox_pad[])
  */
 static inline void touch_ll_proximity_set_meas_times(uint32_t times)
 {
-    RTCCNTL.touch_approach.touch_approach_meas_time = times;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(RTCCNTL.touch_approach, touch_approach_meas_time, times);
 }
 
 /**
@@ -939,7 +1003,7 @@ static inline void touch_ll_proximity_set_meas_times(uint32_t times)
  */
 static inline void touch_ll_proximity_get_meas_times(uint32_t *times)
 {
-    *times = RTCCNTL.touch_approach.touch_approach_meas_time;
+    *times = HAL_FORCE_READ_U32_REG_FIELD(RTCCNTL.touch_approach, touch_approach_meas_time);
 }
 
 /**
@@ -950,11 +1014,11 @@ static inline void touch_ll_proximity_get_meas_times(uint32_t *times)
 static inline void touch_ll_proximity_read_meas_cnt(touch_pad_t touch_num, uint32_t *cnt)
 {
     if (SENS.sar_touch_conf.touch_approach_pad0 == touch_num) {
-        *cnt = SENS.sar_touch_status16.touch_approach_pad0_cnt;
+        *cnt = HAL_FORCE_READ_U32_REG_FIELD(SENS.sar_touch_appr_status, touch_approach_pad0_cnt);
     } else if (SENS.sar_touch_conf.touch_approach_pad1 == touch_num) {
-        *cnt = SENS.sar_touch_status16.touch_approach_pad1_cnt;
+        *cnt = HAL_FORCE_READ_U32_REG_FIELD(SENS.sar_touch_appr_status, touch_approach_pad1_cnt);
     } else if (SENS.sar_touch_conf.touch_approach_pad2 == touch_num) {
-        *cnt = SENS.sar_touch_status16.touch_approach_pad2_cnt;
+        *cnt = HAL_FORCE_READ_U32_REG_FIELD(SENS.sar_touch_appr_status, touch_approach_pad2_cnt);
     }
 }
 
@@ -1001,9 +1065,9 @@ static inline void touch_ll_sleep_get_channel_num(touch_pad_t *touch_num)
 /**
  * Set the trigger threshold of touch sensor in deep sleep.
  * The threshold determines the sensitivity of the touch sensor.
- * The threshold is the original value of the trigger state minus the baseline value.
+ * The threshold is the original value of the trigger state minus the benchmark value.
  *
- * @note The threshold at sleep is the same as the threshold before sleep.
+ * @note In general, the touch threshold during sleep can use the threshold parameter parameters before sleep.
  */
 static inline void touch_ll_sleep_set_threshold(uint32_t touch_thres)
 {
@@ -1013,9 +1077,9 @@ static inline void touch_ll_sleep_set_threshold(uint32_t touch_thres)
 /**
  * Get the trigger threshold of touch sensor in deep sleep.
  * The threshold determines the sensitivity of the touch sensor.
- * The threshold is the original value of the trigger state minus the baseline value.
+ * The threshold is the original value of the trigger state minus the benchmark value.
  *
- * @note The threshold at sleep is the same as the threshold before sleep.
+ * @note In general, the touch threshold during sleep can use the threshold parameter parameters before sleep.
  */
 static inline void touch_ll_sleep_get_threshold(uint32_t *touch_thres)
 {
@@ -1039,13 +1103,51 @@ static inline void touch_ll_sleep_disable_approach(void)
 }
 
 /**
- * Read baseline of touch sensor for sleep pad.
- *
- * @param baseline Pointer to accept touch sensor baseline value.
+ * Get proximity function status for sleep pad.
  */
-static inline void touch_ll_sleep_read_baseline(uint32_t *baseline)
+static inline bool touch_ll_sleep_get_approach_status(void)
 {
-    *baseline = REG_GET_FIELD(SENS_SAR_TOUCH_STATUS15_REG, SENS_TOUCH_SLP_BASELINE);
+    return (bool)RTCCNTL.touch_slp_thres.touch_slp_approach_en;
+}
+
+/**
+ * Read benchmark of touch sensor for sleep pad.
+ *
+ * @param benchmark Pointer to accept touch sensor benchmark value.
+ */
+static inline void touch_ll_sleep_read_benchmark(uint32_t *benchmark)
+{
+    SENS.sar_touch_conf.touch_data_sel = TOUCH_LL_READ_BENCHMARK;
+    *benchmark = SENS.sar_touch_slp_status.touch_slp_data;
+}
+
+static inline void touch_ll_sleep_read_smooth(uint32_t *smooth_data)
+{
+    SENS.sar_touch_conf.touch_data_sel = TOUCH_LL_READ_SMOOTH;
+    *smooth_data = SENS.sar_touch_slp_status.touch_slp_data;
+}
+
+/* Workaround: Note: sleep pad raw data is not in `sar_touch_slp_status` */
+static inline void touch_ll_sleep_read_data(uint32_t *raw_data)
+{
+    uint32_t touch_num = RTCCNTL.touch_slp_thres.touch_slp_pad;
+    SENS.sar_touch_conf.touch_data_sel = TOUCH_LL_READ_RAW;
+    *raw_data = SENS.sar_touch_status[touch_num - 1].touch_pad_data;
+}
+
+static inline void touch_ll_sleep_reset_benchmark(void)
+{
+    RTCCNTL.touch_approach.touch_slp_channel_clr = 1;
+}
+
+/**
+ * Select touch sensor dbias to save power in sleep mode.
+ *
+ * @note If change the dbias, the reading of touch sensor will changed. Users should make sure the threshold.
+ */
+static inline void touch_ll_sleep_low_power(bool is_low_power)
+{
+    RTCCNTL.touch_ctrl2.touch_dbias = is_low_power;
 }
 
 /**
@@ -1055,7 +1157,7 @@ static inline void touch_ll_sleep_read_baseline(uint32_t *baseline)
  */
 static inline void touch_ll_sleep_read_debounce(uint32_t *debounce)
 {
-    *debounce = REG_GET_FIELD(SENS_SAR_TOUCH_STATUS15_REG, SENS_TOUCH_SLP_DEBOUNCE);
+    *debounce = SENS.sar_touch_slp_status.touch_slp_debounce;
 }
 
 /**
@@ -1064,7 +1166,7 @@ static inline void touch_ll_sleep_read_debounce(uint32_t *debounce)
  */
 static inline void touch_ll_sleep_read_proximity_cnt(uint32_t *approach_cnt)
 {
-    *approach_cnt = REG_GET_FIELD(SENS_SAR_TOUCH_STATUS16_REG, SENS_TOUCH_SLP_APPROACH_CNT);
+    *approach_cnt = HAL_FORCE_READ_U32_REG_FIELD(SENS.sar_touch_appr_status, touch_slp_approach_cnt);
 }
 
 /**

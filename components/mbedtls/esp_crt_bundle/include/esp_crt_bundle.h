@@ -36,7 +36,7 @@ extern "C" {
  *             - ESP_OK  if adding certificates was successful.
  *             - Other   if an error occured or an action must be taken by the calling process.
  */
-esp_err_t esp_crt_bundle_attach(mbedtls_ssl_config *conf);
+esp_err_t esp_crt_bundle_attach(void *conf);
 
 
 /**
@@ -59,6 +59,7 @@ void esp_crt_bundle_detach(mbedtls_ssl_config *conf);
  * @param[in]  x509_bundle     A pointer to the certificate bundle.
  */
 void esp_crt_bundle_set(const uint8_t *x509_bundle);
+
 
 #ifdef __cplusplus
 }

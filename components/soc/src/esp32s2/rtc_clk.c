@@ -29,7 +29,7 @@
 #include "soc/dport_reg.h"
 #include "soc/efuse_reg.h"
 #include "soc/syscon_reg.h"
-#include "i2c_rtc_clk.h"
+#include "regi2c_ctrl.h"
 #include "soc_log.h"
 #include "rtc_clk_common.h"
 #include "sdkconfig.h"
@@ -133,47 +133,24 @@ void rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32_t sdm
     REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
 
     if (enable) {
-        I2C_WRITEREG_MASK_RTC(I2C_APLL, I2C_APLL_DSDM2, sdm2);
-        I2C_WRITEREG_MASK_RTC(I2C_APLL, I2C_APLL_DSDM0, sdm0);
-        I2C_WRITEREG_MASK_RTC(I2C_APLL, I2C_APLL_DSDM1, sdm1);
-        I2C_WRITEREG_RTC(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_1);
-        I2C_WRITEREG_RTC(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_2_REV1);
-        I2C_WRITEREG_MASK_RTC(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div);
+        REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
+        REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, sdm0);
+        REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, sdm1);
+        REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_1);
+        REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_2_REV1);
+        REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div);
 
         /* calibration */
-        I2C_WRITEREG_RTC(I2C_APLL, I2C_APLL_IR_CAL_DELAY, APLL_CAL_DELAY_1);
-        I2C_WRITEREG_RTC(I2C_APLL, I2C_APLL_IR_CAL_DELAY, APLL_CAL_DELAY_2);
-        I2C_WRITEREG_RTC(I2C_APLL, I2C_APLL_IR_CAL_DELAY, APLL_CAL_DELAY_3);
+        REGI2C_WRITE(I2C_APLL, I2C_APLL_IR_CAL_DELAY, APLL_CAL_DELAY_1);
+        REGI2C_WRITE(I2C_APLL, I2C_APLL_IR_CAL_DELAY, APLL_CAL_DELAY_2);
+        REGI2C_WRITE(I2C_APLL, I2C_APLL_IR_CAL_DELAY, APLL_CAL_DELAY_3);
 
         /* wait for calibration end */
-        while (!(I2C_READREG_MASK_RTC(I2C_APLL, I2C_APLL_OR_CAL_END))) {
-            /* use ets_delay_us so the RTC bus doesn't get flooded */
+        while (!(REGI2C_READ_MASK(I2C_APLL, I2C_APLL_OR_CAL_END))) {
+            /* use esp_rom_delay_us so the RTC bus doesn't get flooded */
             ets_delay_us(1);
         }
     }
-}
-
-void rtc_clk_set_xtal_wait(void)
-{
-    /*
-     the `xtal_wait` time need 1ms, so we need calibrate slow clk period,
-     and `RTC_CNTL_XTL_BUF_WAIT` depend on it.
-    */
-    rtc_slow_freq_t slow_clk_freq = rtc_clk_slow_freq_get();
-    rtc_slow_freq_t rtc_slow_freq_x32k = RTC_SLOW_FREQ_32K_XTAL;
-    rtc_slow_freq_t rtc_slow_freq_8MD256 = RTC_SLOW_FREQ_8MD256;
-    rtc_cal_sel_t cal_clk = RTC_CAL_RTC_MUX;
-    if (slow_clk_freq == (rtc_slow_freq_x32k)) {
-        cal_clk = RTC_CAL_32K_XTAL;
-    } else if (slow_clk_freq == rtc_slow_freq_8MD256) {
-        cal_clk  = RTC_CAL_8MD256;
-    }
-    uint32_t slow_clk_period = rtc_clk_cal(cal_clk, 2000);
-    uint32_t xtal_wait_1ms = 100;
-    if (slow_clk_period) {
-        xtal_wait_1ms = (1000 << RTC_CLK_CAL_FRACT) / slow_clk_period;
-    }
-    REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_XTL_BUF_WAIT, xtal_wait_1ms);
 }
 
 void rtc_clk_slow_freq_set(rtc_slow_freq_t slow_freq)
@@ -190,7 +167,6 @@ void rtc_clk_slow_freq_set(rtc_slow_freq_t slow_freq)
     so if the slow_clk is 8md256, clk_8m must be force power on
     */
     REG_SET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_FORCE_PU, (slow_freq == RTC_SLOW_FREQ_8MD256) ? 1 : 0);
-    rtc_clk_set_xtal_wait();
     ets_delay_us(DELAY_SLOW_CLK_SWITCH);
 }
 
@@ -254,7 +230,7 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
         dr3 = 0;
         dchgp = 5;
         dcur = 4;
-        I2C_WRITEREG_RTC(I2C_BBPLL, I2C_BBPLL_MODE_HF, 0x6B);
+        REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_MODE_HF, 0x6B);
     } else {
         /* Clear this register to let the digital part know 320M PLL is used */
         CLEAR_PERI_REG_MASK(DPORT_CPU_PER_CONF_REG, DPORT_PLL_FREQ_SEL);
@@ -265,23 +241,23 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
         dr3 = 0;
         dchgp = 5;
         dcur = 5;
-        I2C_WRITEREG_RTC(I2C_BBPLL, I2C_BBPLL_MODE_HF, 0x69);
+        REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_MODE_HF, 0x69);
     }
     uint8_t i2c_bbpll_lref  = (dchgp << I2C_BBPLL_OC_DCHGP_LSB) | (div_ref);
     uint8_t i2c_bbpll_div_7_0 = div7_0;
     uint8_t i2c_bbpll_dcur = (2 << I2C_BBPLL_OC_DLREF_SEL_LSB ) | (1 << I2C_BBPLL_OC_DHREF_SEL_LSB) | dcur;
-    I2C_WRITEREG_RTC(I2C_BBPLL, I2C_BBPLL_OC_REF_DIV, i2c_bbpll_lref);
-    I2C_WRITEREG_RTC(I2C_BBPLL, I2C_BBPLL_OC_DIV_7_0, i2c_bbpll_div_7_0);
-    I2C_WRITEREG_MASK_RTC(I2C_BBPLL, I2C_BBPLL_OC_DR1, dr1);
-    I2C_WRITEREG_MASK_RTC(I2C_BBPLL, I2C_BBPLL_OC_DR3, dr3);
-    I2C_WRITEREG_RTC(I2C_BBPLL, I2C_BBPLL_OC_DCUR, i2c_bbpll_dcur);
+    REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_OC_REF_DIV, i2c_bbpll_lref);
+    REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_OC_DIV_7_0, i2c_bbpll_div_7_0);
+    REGI2C_WRITE_MASK(I2C_BBPLL, I2C_BBPLL_OC_DR1, dr1);
+    REGI2C_WRITE_MASK(I2C_BBPLL, I2C_BBPLL_OC_DR3, dr3);
+    REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_OC_DCUR, i2c_bbpll_dcur);
 
     // Enable calibration by software
-    I2C_WRITEREG_MASK_RTC(I2C_BBPLL, I2C_BBPLL_IR_CAL_ENX_CAP, 1);
+    REGI2C_WRITE_MASK(I2C_BBPLL, I2C_BBPLL_IR_CAL_ENX_CAP, 1);
     for (int ext_cap = 0; ext_cap < 16; ext_cap++) {
         uint8_t cal_result;
-        I2C_WRITEREG_MASK_RTC(I2C_BBPLL, I2C_BBPLL_IR_CAL_EXT_CAP, ext_cap);
-        cal_result = I2C_READREG_MASK_RTC(I2C_BBPLL, I2C_BBPLL_OR_CAL_CAP);
+        REGI2C_WRITE_MASK(I2C_BBPLL, I2C_BBPLL_IR_CAL_EXT_CAP, ext_cap);
+        cal_result = REGI2C_READ_MASK(I2C_BBPLL, I2C_BBPLL_OR_CAL_CAP);
         if (cal_result == 0) {
             break;
         }
@@ -290,7 +266,8 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             abort();
         }
     }
-   s_cur_pll_freq = pll_freq;
+
+    s_cur_pll_freq = pll_freq;
 }
 
 /**

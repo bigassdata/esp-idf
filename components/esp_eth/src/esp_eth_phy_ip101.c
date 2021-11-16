@@ -221,15 +221,23 @@ static esp_err_t ip101_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(ip101->reset_gpio_num);
         gpio_set_direction(ip101->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(ip101->reset_gpio_num, 0);
+        ets_delay_us(100); // insert min input assert time
         gpio_set_level(ip101->reset_gpio_num, 1);
     }
     return ESP_OK;
 }
 
+/**
+ * @note This function is responsible for restarting a new auto-negotiation,
+ *       the result of negotiation won't be relected to uppler layers.
+ *       Instead, the negotiation result is fetched by linker timer, see `ip101_get_link()`
+ */
 static esp_err_t ip101_negotiate(esp_eth_phy_t *phy)
 {
     phy_ip101_t *ip101 = __containerof(phy, phy_ip101_t, parent);
     esp_eth_mediator_t *eth = ip101->eth;
+    /* in case any link status has changed, let's assume we're in link down status */
+    ip101->link_status = ETH_LINK_DOWN;
     /* Restart auto negotiation */
     bmcr_reg_t bmcr = {
         .speed_select = 1,     /* 100Mbps */
@@ -242,20 +250,17 @@ static esp_err_t ip101_negotiate(esp_eth_phy_t *phy)
     /* Wait for auto negotiation complete */
     bmsr_reg_t bmsr;
     uint32_t to = 0;
-    for (to = 0; to < ip101->autonego_timeout_ms / 10; to++) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+    for (to = 0; to < ip101->autonego_timeout_ms / 100; to++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
         PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
                   "read BMSR failed", err);
         if (bmsr.auto_nego_complete) {
             break;
         }
     }
-    /* Auto negotiation failed, maybe no network cable plugged in, so output a warning */
-    if (to >= ip101->autonego_timeout_ms / 10) {
+    if ((to >= ip101->autonego_timeout_ms / 100) && (ip101->link_status == ETH_LINK_UP)) {
         ESP_LOGW(TAG, "auto negotiation timeout");
     }
-    /* Updata information about link, speed, duplex */
-    PHY_CHECK(ip101_update_link_duplex_speed(ip101) == ESP_OK, "update link duplex speed failed", err);
     return ESP_OK;
 err:
     return ESP_FAIL;
@@ -277,12 +282,22 @@ static esp_err_t ip101_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < ip101->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < ip101->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

@@ -26,6 +26,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "hal/cpu_hal.h"
 #include "hal/emac.h"
 #include "soc/soc.h"
 #include "sdkconfig.h"
@@ -62,6 +63,9 @@ typedef struct {
     esp_pm_lock_handle_t pm_lock;
 #endif
 } emac_esp32_t;
+
+static esp_err_t esp_emac_alloc_driver_obj(const eth_mac_config_t *config, emac_esp32_t **emac_out_hdl, void **out_descriptors);
+static void esp_emac_free_driver_obj(emac_esp32_t *emac, void *descriptors);
 
 static esp_err_t emac_esp32_set_mediator(esp_eth_mac_t *mac, esp_eth_mediator_t *eth)
 {
@@ -248,8 +252,8 @@ static void emac_esp32_rx_task(void *arg)
     uint8_t *buffer = NULL;
     uint32_t length = 0;
     while (1) {
-        // block indefinitely until some task notifies me
-        ulTaskNotifyTake(pdFALSE, portMAX_DELAY);
+        // block indefinitely until got notification from underlay event
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         do {
             length = ETH_MAX_PACKET_SIZE;
             buffer = malloc(length);
@@ -288,10 +292,6 @@ static esp_err_t emac_esp32_init(esp_eth_mac_t *mac)
     esp_err_t ret = ESP_OK;
     emac_esp32_t *emac = __containerof(mac, emac_esp32_t, parent);
     esp_eth_mediator_t *eth = emac->eth;
-    /* enable peripheral clock */
-    periph_module_enable(PERIPH_EMAC_MODULE);
-    /* init clock, config gpio, etc */
-    emac_hal_lowlevel_init(&emac->hal);
     /* init gpio used by smi interface */
     emac_esp32_init_smi_gpio(emac);
     MAC_CHECK(eth->on_state_changed(eth, ETH_STATE_LLINIT, NULL) == ESP_OK, "lowlevel init failed", err, ESP_FAIL);
@@ -336,29 +336,28 @@ static esp_err_t emac_esp32_deinit(esp_eth_mac_t *mac)
 #endif
     emac_hal_stop(&emac->hal);
     eth->on_state_changed(eth, ETH_STATE_DEINIT, NULL);
-    periph_module_disable(PERIPH_EMAC_MODULE);
+    return ESP_OK;
+}
+
+static esp_err_t emac_esp32_start(esp_eth_mac_t *mac)
+{
+    emac_esp32_t *emac = __containerof(mac, emac_esp32_t, parent);
+    emac_hal_start(&emac->hal);
+    return ESP_OK;
+}
+
+static esp_err_t emac_esp32_stop(esp_eth_mac_t *mac)
+{
+    emac_esp32_t *emac = __containerof(mac, emac_esp32_t, parent);
+    emac_hal_stop(&emac->hal);
     return ESP_OK;
 }
 
 static esp_err_t emac_esp32_del(esp_eth_mac_t *mac)
 {
     emac_esp32_t *emac = __containerof(mac, emac_esp32_t, parent);
-    esp_intr_free(emac->intr_hdl);
-#ifdef CONFIG_PM_ENABLE
-    if (emac->pm_lock) {
-        esp_pm_lock_delete(emac->pm_lock);
-    }
-#endif
-    vTaskDelete(emac->rx_task_hdl);
-    int i = 0;
-    for (i = 0; i < CONFIG_ETH_DMA_RX_BUFFER_NUM; i++) {
-        free(emac->hal.rx_buf[i]);
-    }
-    for (i = 0; i < CONFIG_ETH_DMA_TX_BUFFER_NUM; i++) {
-        free(emac->hal.tx_buf[i]);
-    }
-    free(emac->hal.descriptors);
-    free(emac);
+    esp_emac_free_driver_obj(emac, emac->hal.descriptors);
+    periph_module_disable(PERIPH_EMAC_MODULE);
     return ESP_OK;
 }
 
@@ -374,77 +373,8 @@ IRAM_ATTR void emac_esp32_isr_handler(void *args)
     }
 }
 
-esp_eth_mac_t *esp_eth_mac_new_esp32(const eth_mac_config_t *config)
+static void esp_emac_free_driver_obj(emac_esp32_t *emac, void *descriptors)
 {
-    esp_err_t ret_code = ESP_OK;
-    esp_eth_mac_t *ret = NULL;
-    void *descriptors = NULL;
-    emac_esp32_t *emac = NULL;
-    MAC_CHECK(config, "can't set mac config to null", err, NULL);
-    if (config->flags & ETH_MAC_FLAG_WORK_WITH_CACHE_DISABLE) {
-        emac = heap_caps_calloc(1, sizeof(emac_esp32_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    } else {
-        emac = calloc(1, sizeof(emac_esp32_t));
-    }
-    MAC_CHECK(emac, "calloc emac failed", err, NULL);
-    /* alloc memory for ethernet dma descriptor */
-    uint32_t desc_size = CONFIG_ETH_DMA_RX_BUFFER_NUM * sizeof(eth_dma_rx_descriptor_t) +
-                         CONFIG_ETH_DMA_TX_BUFFER_NUM * sizeof(eth_dma_tx_descriptor_t);
-    descriptors = heap_caps_calloc(1, desc_size, MALLOC_CAP_DMA);
-    MAC_CHECK(descriptors, "calloc descriptors failed", err, NULL);
-    int i = 0;
-    /* alloc memory for ethernet dma buffer */
-    for (i = 0; i < CONFIG_ETH_DMA_RX_BUFFER_NUM; i++) {
-        emac->rx_buf[i] = heap_caps_calloc(1, CONFIG_ETH_DMA_BUFFER_SIZE, MALLOC_CAP_DMA);
-        if (!(emac->rx_buf[i])) {
-            goto err;
-        }
-    }
-    for (i = 0; i < CONFIG_ETH_DMA_TX_BUFFER_NUM; i++) {
-        emac->tx_buf[i] = heap_caps_calloc(1, CONFIG_ETH_DMA_BUFFER_SIZE, MALLOC_CAP_DMA);
-        if (!(emac->tx_buf[i])) {
-            goto err;
-        }
-    }
-    /* initialize hal layer driver */
-    emac_hal_init(&emac->hal, descriptors, emac->rx_buf, emac->tx_buf);
-    emac->sw_reset_timeout_ms = config->sw_reset_timeout_ms;
-    emac->smi_mdc_gpio_num = config->smi_mdc_gpio_num;
-    emac->smi_mdio_gpio_num = config->smi_mdio_gpio_num;
-    emac->parent.set_mediator = emac_esp32_set_mediator;
-    emac->parent.init = emac_esp32_init;
-    emac->parent.deinit = emac_esp32_deinit;
-    emac->parent.del = emac_esp32_del;
-    emac->parent.write_phy_reg = emac_esp32_write_phy_reg;
-    emac->parent.read_phy_reg = emac_esp32_read_phy_reg;
-    emac->parent.set_addr = emac_esp32_set_addr;
-    emac->parent.get_addr = emac_esp32_get_addr;
-    emac->parent.set_speed = emac_esp32_set_speed;
-    emac->parent.set_duplex = emac_esp32_set_duplex;
-    emac->parent.set_link = emac_esp32_set_link;
-    emac->parent.set_promiscuous = emac_esp32_set_promiscuous;
-    emac->parent.transmit = emac_esp32_transmit;
-    emac->parent.receive = emac_esp32_receive;
-    /* Interrupt configuration */
-    if (config->flags & ETH_MAC_FLAG_WORK_WITH_CACHE_DISABLE) {
-        ret_code = esp_intr_alloc(ETS_ETH_MAC_INTR_SOURCE, ESP_INTR_FLAG_IRAM,
-                                  emac_esp32_isr_handler, &emac->hal, &(emac->intr_hdl));
-    } else {
-        ret_code = esp_intr_alloc(ETS_ETH_MAC_INTR_SOURCE, 0,
-                                  emac_esp32_isr_handler, &emac->hal, &(emac->intr_hdl));
-    }
-    MAC_CHECK(ret_code == ESP_OK, "alloc emac interrupt failed", err, NULL);
-#ifdef CONFIG_PM_ENABLE
-    MAC_CHECK(esp_pm_lock_create(ESP_PM_APB_FREQ_MAX, 0, "emac_esp32", &emac->pm_lock) == ESP_OK,
-              "create pm lock failed", err, NULL);
-#endif
-    /* create rx task */
-    BaseType_t xReturned = xTaskCreate(emac_esp32_rx_task, "emac_rx", config->rx_task_stack_size, emac,
-                                       config->rx_task_prio, &emac->rx_task_hdl);
-    MAC_CHECK(xReturned == pdPASS, "create emac_rx task failed", err, NULL);
-    return &(emac->parent);
-
-err:
     if (emac) {
         if (emac->rx_task_hdl) {
             vTaskDelete(emac->rx_task_hdl);
@@ -468,6 +398,106 @@ err:
     if (descriptors) {
         free(descriptors);
     }
+}
+
+static esp_err_t esp_emac_alloc_driver_obj(const eth_mac_config_t *config, emac_esp32_t **emac_out_hdl, void **out_descriptors)
+{
+    esp_err_t ret = ESP_OK;
+    emac_esp32_t *emac = NULL;
+    void *descriptors = NULL;
+    if (config->flags & ETH_MAC_FLAG_WORK_WITH_CACHE_DISABLE) {
+        emac = heap_caps_calloc(1, sizeof(emac_esp32_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    } else {
+        emac = calloc(1, sizeof(emac_esp32_t));
+    }
+    MAC_CHECK(emac, "no mem for esp emac object", err, ESP_ERR_NO_MEM);
+    /* alloc memory for ethernet dma descriptor */
+    uint32_t desc_size = CONFIG_ETH_DMA_RX_BUFFER_NUM * sizeof(eth_dma_rx_descriptor_t) +
+                         CONFIG_ETH_DMA_TX_BUFFER_NUM * sizeof(eth_dma_tx_descriptor_t);
+    descriptors = heap_caps_calloc(1, desc_size, MALLOC_CAP_DMA);
+    MAC_CHECK(descriptors, "no mem for descriptors", err, ESP_ERR_NO_MEM);
+    /* alloc memory for ethernet dma buffer */
+    for (int i = 0; i < CONFIG_ETH_DMA_RX_BUFFER_NUM; i++) {
+        emac->rx_buf[i] = heap_caps_calloc(1, CONFIG_ETH_DMA_BUFFER_SIZE, MALLOC_CAP_DMA);
+        MAC_CHECK(emac->rx_buf[i], "no mem for RX DMA buffers", err, ESP_ERR_NO_MEM);
+    }
+    for (int i = 0; i < CONFIG_ETH_DMA_TX_BUFFER_NUM; i++) {
+        emac->tx_buf[i] = heap_caps_calloc(1, CONFIG_ETH_DMA_BUFFER_SIZE, MALLOC_CAP_DMA);
+        MAC_CHECK(emac->tx_buf[i], "no mem for TX DMA buffers", err, ESP_ERR_NO_MEM);
+    }
+    /* alloc PM lock */
+#ifdef CONFIG_PM_ENABLE
+    MAC_CHECK(esp_pm_lock_create(ESP_PM_APB_FREQ_MAX, 0, "emac_esp32", &emac->pm_lock) == ESP_OK,
+              "create pm lock failed", err, ESP_FAIL);
+#endif
+    /* create rx task */
+    BaseType_t core_num = tskNO_AFFINITY;
+    if (config->flags & ETH_MAC_FLAG_PIN_TO_CORE) {
+        core_num = cpu_hal_get_core_id();
+    }
+    BaseType_t xReturned = xTaskCreatePinnedToCore(emac_esp32_rx_task, "emac_rx", config->rx_task_stack_size, emac,
+                           config->rx_task_prio, &emac->rx_task_hdl, core_num);
+    MAC_CHECK(xReturned == pdPASS, "create emac_rx task failed", err, ESP_FAIL);
+
+    *out_descriptors = descriptors;
+    *emac_out_hdl = emac;
+    return ESP_OK;
+err:
+    esp_emac_free_driver_obj(emac, descriptors);
+    return ret;
+}
+
+esp_eth_mac_t *esp_eth_mac_new_esp32(const eth_mac_config_t *config)
+{
+    esp_err_t ret_code = ESP_OK;
+    esp_eth_mac_t *ret = NULL;
+    void *descriptors = NULL;
+    emac_esp32_t *emac = NULL;
+    MAC_CHECK(config, "can't set mac config to null", err, NULL);
+    ret_code = esp_emac_alloc_driver_obj(config, &emac, &descriptors);
+    MAC_CHECK(ret_code == ESP_OK, "alloc driver object failed", err, NULL);
+
+    /* enable APB to access Ethernet peripheral registers */
+    periph_module_enable(PERIPH_EMAC_MODULE);
+    /* initialize hal layer driver */
+    emac_hal_init(&emac->hal, descriptors, emac->rx_buf, emac->tx_buf);
+    // config emac data interface
+    emac_hal_lowlevel_init(&emac->hal);
+    /* alloc interrupt */
+    if (config->flags & ETH_MAC_FLAG_WORK_WITH_CACHE_DISABLE) {
+        ret_code = esp_intr_alloc(ETS_ETH_MAC_INTR_SOURCE, ESP_INTR_FLAG_IRAM,
+                                  emac_esp32_isr_handler, &emac->hal, &(emac->intr_hdl));
+    } else {
+        ret_code = esp_intr_alloc(ETS_ETH_MAC_INTR_SOURCE, 0,
+                                  emac_esp32_isr_handler, &emac->hal, &(emac->intr_hdl));
+    }
+    MAC_CHECK(ret_code == ESP_OK, "alloc emac interrupt failed", err_intr, NULL);
+
+    emac->sw_reset_timeout_ms = config->sw_reset_timeout_ms;
+    emac->smi_mdc_gpio_num = config->smi_mdc_gpio_num;
+    emac->smi_mdio_gpio_num = config->smi_mdio_gpio_num;
+    emac->parent.set_mediator = emac_esp32_set_mediator;
+    emac->parent.init = emac_esp32_init;
+    emac->parent.deinit = emac_esp32_deinit;
+    emac->parent.start = emac_esp32_start;
+    emac->parent.stop = emac_esp32_stop;
+    emac->parent.del = emac_esp32_del;
+    emac->parent.write_phy_reg = emac_esp32_write_phy_reg;
+    emac->parent.read_phy_reg = emac_esp32_read_phy_reg;
+    emac->parent.set_addr = emac_esp32_set_addr;
+    emac->parent.get_addr = emac_esp32_get_addr;
+    emac->parent.set_speed = emac_esp32_set_speed;
+    emac->parent.set_duplex = emac_esp32_set_duplex;
+    emac->parent.set_link = emac_esp32_set_link;
+    emac->parent.set_promiscuous = emac_esp32_set_promiscuous;
+    emac->parent.transmit = emac_esp32_transmit;
+    emac->parent.receive = emac_esp32_receive;
+    return &(emac->parent);
+
+err_intr:
+    periph_module_disable(PERIPH_EMAC_MODULE);
+err:
+    esp_emac_free_driver_obj(emac, descriptors);
     return ret;
 }
 
@@ -484,6 +514,18 @@ IRAM_ATTR void emac_hal_rx_complete_cb(void *arg)
 }
 
 IRAM_ATTR void emac_hal_rx_unavail_cb(void *arg)
+{
+    emac_hal_context_t *hal = (emac_hal_context_t *)arg;
+    emac_esp32_t *emac = __containerof(hal, emac_esp32_t, hal);
+    BaseType_t high_task_wakeup;
+    /* notify receive task */
+    vTaskNotifyGiveFromISR(emac->rx_task_hdl, &high_task_wakeup);
+    if (high_task_wakeup == pdTRUE) {
+        emac->isr_need_yield = true;
+    }
+}
+
+IRAM_ATTR void emac_hal_rx_early_cb(void *arg)
 {
     emac_hal_context_t *hal = (emac_hal_context_t *)arg;
     emac_esp32_t *emac = __containerof(hal, emac_esp32_t, hal);

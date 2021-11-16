@@ -17,8 +17,11 @@
 
 
 #pragma once
+#include "esp_attr.h"
 #include "hal/uart_types.h"
 #include "soc/uart_periph.h"
+#include "soc/uart_struct.h"
+#include "hal/hal_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,7 +69,7 @@ typedef enum {
  *
  * @return None
  */
-static inline void uart_ll_set_baudrate(uart_dev_t *hw, uart_sclk_t source_clk, uint32_t baud)
+FORCE_INLINE_ATTR void uart_ll_set_baudrate(uart_dev_t *hw, uart_sclk_t source_clk, uint32_t baud)
 {
     uint32_t sclk_freq = (source_clk == UART_SCLK_APB) ? APB_CLK_FREQ : REF_CLK_FREQ;
     uint32_t clk_div = ((sclk_freq) << 4) / baud;
@@ -85,7 +88,7 @@ static inline void uart_ll_set_baudrate(uart_dev_t *hw, uart_sclk_t source_clk, 
  *
  * @return The current baudrate
  */
-static inline uint32_t uart_ll_get_baudrate(uart_dev_t *hw)
+FORCE_INLINE_ATTR uint32_t uart_ll_get_baudrate(uart_dev_t *hw)
 {
     uint32_t src_clk = hw->conf0.tick_ref_always_on ? APB_CLK_FREQ : REF_CLK_FREQ;
     typeof(hw->clk_div) div_reg = hw->clk_div;
@@ -100,7 +103,7 @@ static inline uint32_t uart_ll_get_baudrate(uart_dev_t *hw)
  *
  * @return None
  */
-static inline void uart_ll_ena_intr_mask(uart_dev_t *hw, uint32_t mask)
+FORCE_INLINE_ATTR void uart_ll_ena_intr_mask(uart_dev_t *hw, uint32_t mask)
 {
     hw->int_ena.val |= mask;
 }
@@ -113,7 +116,7 @@ static inline void uart_ll_ena_intr_mask(uart_dev_t *hw, uint32_t mask)
  *
  * @return None
  */
-static inline void uart_ll_disable_intr_mask(uart_dev_t *hw, uint32_t mask)
+FORCE_INLINE_ATTR void uart_ll_disable_intr_mask(uart_dev_t *hw, uint32_t mask)
 {
     hw->int_ena.val &= (~mask);
 }
@@ -125,7 +128,7 @@ static inline void uart_ll_disable_intr_mask(uart_dev_t *hw, uint32_t mask)
  *
  * @return The UART interrupt status.
  */
-static inline uint32_t uart_ll_get_intsts_mask(uart_dev_t *hw)
+FORCE_INLINE_ATTR uint32_t uart_ll_get_intsts_mask(uart_dev_t *hw)
 {
     return hw->int_st.val;
 }
@@ -138,7 +141,7 @@ static inline uint32_t uart_ll_get_intsts_mask(uart_dev_t *hw)
  *
  * @return None
  */
-static inline void uart_ll_clr_intsts_mask(uart_dev_t *hw, uint32_t mask)
+FORCE_INLINE_ATTR void uart_ll_clr_intsts_mask(uart_dev_t *hw, uint32_t mask)
 {
     hw->int_clr.val = mask;
 }
@@ -150,7 +153,7 @@ static inline void uart_ll_clr_intsts_mask(uart_dev_t *hw, uint32_t mask)
  *
  * @return Interrupt enabled value
  */
-static inline uint32_t uart_ll_get_intr_ena_status(uart_dev_t *hw)
+FORCE_INLINE_ATTR uint32_t uart_ll_get_intr_ena_status(uart_dev_t *hw)
 {
     return hw->int_ena.val;
 }
@@ -164,12 +167,15 @@ static inline uint32_t uart_ll_get_intr_ena_status(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_read_rxfifo(uart_dev_t *hw, uint8_t *buf, uint32_t rd_len)
+FORCE_INLINE_ATTR void uart_ll_read_rxfifo(uart_dev_t *hw, uint8_t *buf, uint32_t rd_len)
 {
     //Get the UART APB fifo addr. Read fifo, we use APB address
     uint32_t fifo_addr = (hw == &UART0) ? UART_FIFO_REG(0) : (hw == &UART1) ? UART_FIFO_REG(1) : UART_FIFO_REG(2);
     for(int i = 0; i < rd_len; i++) {
         buf[i] = READ_PERI_REG(fifo_addr);
+#ifdef CONFIG_COMPILER_OPTIMIZATION_PERF
+        __asm__ __volatile__("nop");
+#endif
     }
 }
 
@@ -182,7 +188,7 @@ static inline void uart_ll_read_rxfifo(uart_dev_t *hw, uint8_t *buf, uint32_t rd
  *
  * @return None
  */
-static inline void uart_ll_write_txfifo(uart_dev_t *hw, const uint8_t *buf, uint32_t wr_len)
+FORCE_INLINE_ATTR void uart_ll_write_txfifo(uart_dev_t *hw, const uint8_t *buf, uint32_t wr_len)
 {
     //Get the UART AHB fifo addr, Write fifo, we use AHB address
     uint32_t fifo_addr = (hw == &UART0) ? UART_FIFO_AHB_REG(0) : (hw == &UART1) ? UART_FIFO_AHB_REG(1) : UART_FIFO_AHB_REG(2);
@@ -198,7 +204,7 @@ static inline void uart_ll_write_txfifo(uart_dev_t *hw, const uint8_t *buf, uint
  *
  * @return None
  */
-static inline void uart_ll_rxfifo_rst(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_rxfifo_rst(uart_dev_t *hw)
 {
     //Hardware issue: we can not use `rxfifo_rst` to reset the hw rxfifo.
     uint16_t fifo_cnt;
@@ -206,7 +212,7 @@ static inline void uart_ll_rxfifo_rst(uart_dev_t *hw)
     //Get the UART APB fifo addr
     uint32_t fifo_addr = (hw == &UART0) ? UART_FIFO_REG(0) : (hw == &UART1) ? UART_FIFO_REG(1) : UART_FIFO_REG(2);
     do {
-        fifo_cnt = hw->status.rxfifo_cnt;
+        fifo_cnt = HAL_FORCE_READ_U32_REG_FIELD(hw->status, rxfifo_cnt);
         rxmem_sta.val = hw->mem_rx_status.val;
         if(fifo_cnt != 0 ||  (rxmem_sta.rd_addr != rxmem_sta.wr_addr)) {
             READ_PERI_REG(fifo_addr);
@@ -219,14 +225,20 @@ static inline void uart_ll_rxfifo_rst(uart_dev_t *hw)
 /**
  * @brief  Reset the UART hw txfifo.
  *
+ * Note:   Due to hardware issue, reset UART1's txfifo will also reset UART2's txfifo.
+ *         So reserve this function for UART1 and UART2. Please do DPORT reset for UART and its memory at chip startup
+ *         to ensure the TX FIFO is reset correctly at the beginning.
+ *
  * @param  hw Beginning address of the peripheral registers.
  *
  * @return None
  */
-static inline void uart_ll_txfifo_rst(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_txfifo_rst(uart_dev_t *hw)
 {
-    hw->conf0.txfifo_rst = 1;
-    hw->conf0.txfifo_rst = 0;
+    if (hw == &UART0) {
+        hw->conf0.txfifo_rst = 1;
+        hw->conf0.txfifo_rst = 0;
+    }
 }
 
 /**
@@ -236,9 +248,23 @@ static inline void uart_ll_txfifo_rst(uart_dev_t *hw)
  *
  * @return The readable data length in rxfifo.
  */
-static inline uint32_t uart_ll_get_rxfifo_len(uart_dev_t *hw)
+FORCE_INLINE_ATTR uint32_t uart_ll_get_rxfifo_len(uart_dev_t *hw)
 {
-    return hw->status.rxfifo_cnt;
+    uint32_t fifo_cnt = HAL_FORCE_READ_U32_REG_FIELD(hw->status, rxfifo_cnt);
+    typeof(hw->mem_rx_status) rx_status = hw->mem_rx_status;
+    uint32_t len = 0;
+
+    // When using DPort to read fifo, fifo_cnt is not credible, we need to calculate the real cnt based on the fifo read and write pointer.
+    // When using AHB to read FIFO, we can use fifo_cnt to indicate the data length in fifo.
+    if (rx_status.wr_addr > rx_status.rd_addr) {
+        len = rx_status.wr_addr - rx_status.rd_addr;
+    } else if (rx_status.wr_addr < rx_status.rd_addr) {
+        len = (rx_status.wr_addr + 128) - rx_status.rd_addr;
+    } else {
+        len = fifo_cnt > 0 ? 128 : 0;
+    }
+
+    return len;
 }
 
 /**
@@ -248,9 +274,9 @@ static inline uint32_t uart_ll_get_rxfifo_len(uart_dev_t *hw)
  *
  * @return The data length of txfifo can be written.
  */
-static inline uint32_t uart_ll_get_txfifo_len(uart_dev_t *hw)
+FORCE_INLINE_ATTR uint32_t uart_ll_get_txfifo_len(uart_dev_t *hw)
 {
-    return UART_LL_FIFO_DEF_LEN - hw->status.txfifo_cnt;
+    return UART_LL_FIFO_DEF_LEN - HAL_FORCE_READ_U32_REG_FIELD(hw->status, txfifo_cnt);
 }
 
 /**
@@ -261,14 +287,14 @@ static inline uint32_t uart_ll_get_txfifo_len(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_set_stop_bits(uart_dev_t *hw, uart_stop_bits_t stop_bit)
+FORCE_INLINE_ATTR void uart_ll_set_stop_bits(uart_dev_t *hw, uart_stop_bits_t stop_bit)
 {
-    //workaround for hardware issue, when UART stop bit set as 2-bit mode. 
+    //workaround for hardware issue, when UART stop bit set as 2-bit mode.
     if(stop_bit == UART_STOP_BITS_2)  {
         hw->rs485_conf.dl1_en = 1;
         hw->conf0.stop_bit_num = 0x1;
     } else {
-        hw->rs485_conf.dl1_en = 0;   
+        hw->rs485_conf.dl1_en = 0;
         hw->conf0.stop_bit_num = stop_bit;
     }
 }
@@ -281,9 +307,9 @@ static inline void uart_ll_set_stop_bits(uart_dev_t *hw, uart_stop_bits_t stop_b
  *
  * @return None.
  */
-static inline void uart_ll_get_stop_bits(uart_dev_t *hw, uart_stop_bits_t *stop_bit)
+FORCE_INLINE_ATTR void uart_ll_get_stop_bits(uart_dev_t *hw, uart_stop_bits_t *stop_bit)
 {
-    //workaround for hardware issue, when UART stop bit set as 2-bit mode. 
+    //workaround for hardware issue, when UART stop bit set as 2-bit mode.
     if(hw->rs485_conf.dl1_en == 1 && hw->conf0.stop_bit_num == 0x1) {
         *stop_bit = UART_STOP_BITS_2;
     } else {
@@ -299,7 +325,7 @@ static inline void uart_ll_get_stop_bits(uart_dev_t *hw, uart_stop_bits_t *stop_
  *
  * @return None.
  */
-static inline void uart_ll_set_parity(uart_dev_t *hw, uart_parity_t parity_mode)
+FORCE_INLINE_ATTR void uart_ll_set_parity(uart_dev_t *hw, uart_parity_t parity_mode)
 {
     if(parity_mode != UART_PARITY_DISABLE) {
         hw->conf0.parity = parity_mode & 0x1;
@@ -315,7 +341,7 @@ static inline void uart_ll_set_parity(uart_dev_t *hw, uart_parity_t parity_mode)
  *
  * @return None.
  */
-static inline void uart_ll_get_parity(uart_dev_t *hw, uart_parity_t *parity_mode)
+FORCE_INLINE_ATTR void uart_ll_get_parity(uart_dev_t *hw, uart_parity_t *parity_mode)
 {
     if(hw->conf0.parity_en) {
         *parity_mode = 0X2 | hw->conf0.parity;
@@ -333,7 +359,7 @@ static inline void uart_ll_get_parity(uart_dev_t *hw, uart_parity_t *parity_mode
  *
  * @return None.
  */
-static inline void uart_ll_set_rxfifo_full_thr(uart_dev_t *hw, uint16_t full_thrhd)
+FORCE_INLINE_ATTR void uart_ll_set_rxfifo_full_thr(uart_dev_t *hw, uint16_t full_thrhd)
 {
     hw->conf1.rxfifo_full_thrhd = full_thrhd;
 }
@@ -347,7 +373,7 @@ static inline void uart_ll_set_rxfifo_full_thr(uart_dev_t *hw, uint16_t full_thr
  *
  * @return None.
  */
-static inline void uart_ll_set_txfifo_empty_thr(uart_dev_t *hw, uint16_t empty_thrhd)
+FORCE_INLINE_ATTR void uart_ll_set_txfifo_empty_thr(uart_dev_t *hw, uint16_t empty_thrhd)
 {
     hw->conf1.txfifo_empty_thrhd = empty_thrhd;
 }
@@ -361,7 +387,7 @@ static inline void uart_ll_set_txfifo_empty_thr(uart_dev_t *hw, uint16_t empty_t
  *
  * @return None.
  */
-static inline void uart_ll_set_rx_idle_thr(uart_dev_t *hw, uint32_t rx_idle_thr)
+FORCE_INLINE_ATTR void uart_ll_set_rx_idle_thr(uart_dev_t *hw, uint32_t rx_idle_thr)
 {
     hw->idle_conf.rx_idle_thrhd = rx_idle_thr;
 }
@@ -374,34 +400,9 @@ static inline void uart_ll_set_rx_idle_thr(uart_dev_t *hw, uint32_t rx_idle_thr)
  *
  * @return None.
  */
-static inline void uart_ll_set_tx_idle_num(uart_dev_t *hw, uint32_t idle_num)
+FORCE_INLINE_ATTR void uart_ll_set_tx_idle_num(uart_dev_t *hw, uint32_t idle_num)
 {
     hw->idle_conf.tx_idle_num = idle_num;
-}
-
-/**
- * @brief  Configure the timeout value for receiver receiving a byte, and enable rx timeout function.
- *
- * @param  hw Beginning address of the peripheral registers.
- * @param  tout_thr The timeout value. The rx timeout function will be disabled if `tout_thr == 0`.
- *
- * @return None.
- */
-static inline void uart_ll_set_rx_tout(uart_dev_t *hw, uint8_t tout_thr)
-{
-    // The tout_thresh = 1, defines TOUT interrupt timeout equal to
-    // transmission time of one symbol (~11 bit) on current baudrate
-    if (hw->conf0.tick_ref_always_on == 0) {
-        //Hardware issue workaround: when using ref_tick, the rx timeout threshold needs increase to 10 times.
-        //T_ref = T_apb * APB_CLK/(REF_TICK << CLKDIV_FRAG_BIT_WIDTH)
-        tout_thr = tout_thr * UART_LL_TOUT_REF_FACTOR_DEFAULT;
-    }
-    if(tout_thr > 0) {
-        hw->conf1.rx_tout_thrhd = tout_thr;
-        hw->conf1.rx_tout_en = 1;
-    } else {
-        hw->conf1.rx_tout_en = 0;
-    }
 }
 
 /**
@@ -412,10 +413,10 @@ static inline void uart_ll_set_rx_tout(uart_dev_t *hw, uint8_t tout_thr)
  *
  * @return None.
  */
-static inline void uart_ll_tx_break(uart_dev_t *hw, uint32_t break_num)
+FORCE_INLINE_ATTR void uart_ll_tx_break(uart_dev_t *hw, uint32_t break_num)
 {
     if(break_num > 0) {
-        hw->idle_conf.tx_brk_num = break_num;
+        HAL_FORCE_MODIFY_U32_REG_FIELD(hw->idle_conf, tx_brk_num, break_num);
         hw->conf0.txd_brk = 1;
     } else {
         hw->conf0.txd_brk = 0;
@@ -431,7 +432,7 @@ static inline void uart_ll_tx_break(uart_dev_t *hw, uint32_t break_num)
  *
  * @return None.
  */
-static inline void uart_ll_set_hw_flow_ctrl(uart_dev_t *hw, uart_hw_flowcontrol_t flow_ctrl, uint32_t rx_thrs)
+FORCE_INLINE_ATTR void uart_ll_set_hw_flow_ctrl(uart_dev_t *hw, uart_hw_flowcontrol_t flow_ctrl, uint32_t rx_thrs)
 {
     //only when UART_HW_FLOWCTRL_RTS is set , will the rx_thresh value be set.
     if(flow_ctrl & UART_HW_FLOWCTRL_RTS) {
@@ -455,7 +456,7 @@ static inline void uart_ll_set_hw_flow_ctrl(uart_dev_t *hw, uart_hw_flowcontrol_
  *
  * @return None.
  */
-static inline void uart_ll_get_hw_flow_ctrl(uart_dev_t *hw, uart_hw_flowcontrol_t *flow_ctrl)
+FORCE_INLINE_ATTR void uart_ll_get_hw_flow_ctrl(uart_dev_t *hw, uart_hw_flowcontrol_t *flow_ctrl)
 {
     *flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     if(hw->conf1.rx_flow_en) {
@@ -475,15 +476,15 @@ static inline void uart_ll_get_hw_flow_ctrl(uart_dev_t *hw, uart_hw_flowcontrol_
  *
  * @return None.
  */
-static inline void uart_ll_set_sw_flow_ctrl(uart_dev_t *hw, uart_sw_flowctrl_t *flow_ctrl, bool sw_flow_ctrl_en)
+FORCE_INLINE_ATTR void uart_ll_set_sw_flow_ctrl(uart_dev_t *hw, uart_sw_flowctrl_t *flow_ctrl, bool sw_flow_ctrl_en)
 {
     if(sw_flow_ctrl_en) {
         hw->flow_conf.xonoff_del = 1;
         hw->flow_conf.sw_flow_con_en = 1;
-        hw->swfc_conf.xon_threshold = flow_ctrl->xon_thrd;
-        hw->swfc_conf.xoff_threshold = flow_ctrl->xoff_thrd;
-        hw->swfc_conf.xon_char = flow_ctrl->xon_char;
-        hw->swfc_conf.xoff_char = flow_ctrl->xoff_char;
+        HAL_FORCE_MODIFY_U32_REG_FIELD(hw->swfc_conf, xon_threshold, flow_ctrl->xon_thrd);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(hw->swfc_conf, xoff_threshold, flow_ctrl->xoff_thrd);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(hw->swfc_conf, xon_char, flow_ctrl->xon_char);
+        HAL_FORCE_MODIFY_U32_REG_FIELD(hw->swfc_conf, xoff_char, flow_ctrl->xoff_char);
     } else {
         hw->flow_conf.sw_flow_con_en = 0;
         hw->flow_conf.xonoff_del = 0;
@@ -503,10 +504,10 @@ static inline void uart_ll_set_sw_flow_ctrl(uart_dev_t *hw, uart_sw_flowctrl_t *
  *
  * @return None.
  */
-static inline void uart_ll_set_at_cmd_char(uart_dev_t *hw, uart_at_cmd_t *cmd_char)
+FORCE_INLINE_ATTR void uart_ll_set_at_cmd_char(uart_dev_t *hw, uart_at_cmd_t *cmd_char)
 {
-    hw->at_cmd_char.data = cmd_char->cmd_char;
-    hw->at_cmd_char.char_num = cmd_char->char_num;
+    HAL_FORCE_MODIFY_U32_REG_FIELD(hw->at_cmd_char, data, cmd_char->cmd_char);
+    HAL_FORCE_MODIFY_U32_REG_FIELD(hw->at_cmd_char, char_num, cmd_char->char_num);
     hw->at_cmd_postcnt.post_idle_num = cmd_char->post_idle;
     hw->at_cmd_precnt.pre_idle_num = cmd_char->pre_idle;
     hw->at_cmd_gaptout.rx_gap_tout = cmd_char->gap_tout;
@@ -520,7 +521,7 @@ static inline void uart_ll_set_at_cmd_char(uart_dev_t *hw, uart_at_cmd_t *cmd_ch
  *
  * @return None.
  */
-static inline void uart_ll_set_data_bit_num(uart_dev_t *hw, uart_word_length_t data_bit)
+FORCE_INLINE_ATTR void uart_ll_set_data_bit_num(uart_dev_t *hw, uart_word_length_t data_bit)
 {
     hw->conf0.bit_num = data_bit;
 }
@@ -533,7 +534,7 @@ static inline void uart_ll_set_data_bit_num(uart_dev_t *hw, uart_word_length_t d
  *
  * @return None.
  */
-static inline void uart_ll_get_sclk(uart_dev_t *hw, uart_sclk_t* source_clk)
+FORCE_INLINE_ATTR void uart_ll_get_sclk(uart_dev_t *hw, uart_sclk_t* source_clk)
 {
     *source_clk = hw->conf0.tick_ref_always_on ? UART_SCLK_APB : UART_SCLK_REF_TICK;
 }
@@ -546,7 +547,7 @@ static inline void uart_ll_get_sclk(uart_dev_t *hw, uart_sclk_t* source_clk)
  *
  * @return None.
  */
-static inline void uart_ll_set_rts_active_level(uart_dev_t *hw, int level)
+FORCE_INLINE_ATTR void uart_ll_set_rts_active_level(uart_dev_t *hw, int level)
 {
     hw->conf0.sw_rts = level & 0x1;
 }
@@ -559,7 +560,7 @@ static inline void uart_ll_set_rts_active_level(uart_dev_t *hw, int level)
  *
  * @return None.
  */
-static inline void uart_ll_set_dtr_active_level(uart_dev_t *hw, int level)
+FORCE_INLINE_ATTR void uart_ll_set_dtr_active_level(uart_dev_t *hw, int level)
 {
     hw->conf0.sw_dtr = level & 0x1;
 }
@@ -573,7 +574,7 @@ static inline void uart_ll_set_dtr_active_level(uart_dev_t *hw, int level)
  *
  * @return None.
  */
-static inline void uart_ll_set_wakeup_thrd(uart_dev_t *hw, uint32_t wakeup_thrd)
+FORCE_INLINE_ATTR void uart_ll_set_wakeup_thrd(uart_dev_t *hw, uint32_t wakeup_thrd)
 {
     hw->sleep_conf.active_threshold = wakeup_thrd  - SOC_UART_MIN_WAKEUP_THRESH;
 }
@@ -585,7 +586,7 @@ static inline void uart_ll_set_wakeup_thrd(uart_dev_t *hw, uint32_t wakeup_thrd)
  *
  * @return None.
  */
-static inline void uart_ll_set_mode_normal(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_set_mode_normal(uart_dev_t *hw)
 {
     hw->rs485_conf.en = 0;
     hw->rs485_conf.tx_rx_en = 0;
@@ -600,7 +601,7 @@ static inline void uart_ll_set_mode_normal(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_set_mode_rs485_app_ctrl(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_set_mode_rs485_app_ctrl(uart_dev_t *hw)
 {
     // Application software control, remove echo
     hw->rs485_conf.rx_busy_tx_en = 1;
@@ -617,7 +618,7 @@ static inline void uart_ll_set_mode_rs485_app_ctrl(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_set_mode_rs485_half_duplex(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_set_mode_rs485_half_duplex(uart_dev_t *hw)
 {
     // Enable receiver, sw_rts = 1  generates low level on RTS pin
     hw->conf0.sw_rts = 1;
@@ -636,7 +637,7 @@ static inline void uart_ll_set_mode_rs485_half_duplex(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_set_mode_collision_detect(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_set_mode_collision_detect(uart_dev_t *hw)
 {
     hw->conf0.irda_en = 0;
     // Transmitters output signal loop back to the receivers input signal
@@ -654,7 +655,7 @@ static inline void uart_ll_set_mode_collision_detect(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_set_mode_irda(uart_dev_t *hw)
+FORCE_INLINE_ATTR void uart_ll_set_mode_irda(uart_dev_t *hw)
 {
     hw->rs485_conf.en = 0;
     hw->rs485_conf.tx_rx_en = 0;
@@ -671,7 +672,7 @@ static inline void uart_ll_set_mode_irda(uart_dev_t *hw)
  *
  * @return None.
  */
-static inline void uart_ll_set_mode(uart_dev_t *hw, uart_mode_t mode)
+FORCE_INLINE_ATTR void uart_ll_set_mode(uart_dev_t *hw, uart_mode_t mode)
 {
     switch (mode) {
         default:
@@ -702,10 +703,10 @@ static inline void uart_ll_set_mode(uart_dev_t *hw, uart_mode_t mode)
  *
  * @return None.
  */
-static inline void uart_ll_get_at_cmd_char(uart_dev_t *hw, uint8_t *cmd_char, uint8_t *char_num)
+FORCE_INLINE_ATTR void uart_ll_get_at_cmd_char(uart_dev_t *hw, uint8_t *cmd_char, uint8_t *char_num)
 {
-    *cmd_char = hw->at_cmd_char.data;
-    *char_num = hw->at_cmd_char.char_num;
+    *cmd_char = HAL_FORCE_READ_U32_REG_FIELD(hw->at_cmd_char, data);
+    *char_num = HAL_FORCE_READ_U32_REG_FIELD(hw->at_cmd_char, char_num);
 }
 
 /**
@@ -715,7 +716,7 @@ static inline void uart_ll_get_at_cmd_char(uart_dev_t *hw, uint8_t *cmd_char, ui
  *
  * @return The UART wakeup threshold value.
  */
-static inline uint32_t uart_ll_get_wakeup_thrd(uart_dev_t *hw)
+FORCE_INLINE_ATTR uint32_t uart_ll_get_wakeup_thrd(uart_dev_t *hw)
 {
     return hw->sleep_conf.active_threshold + SOC_UART_MIN_WAKEUP_THRESH;
 }
@@ -728,7 +729,7 @@ static inline uint32_t uart_ll_get_wakeup_thrd(uart_dev_t *hw)
  *
  * @return The bit mode.
  */
-static inline void uart_ll_get_data_bit_num(uart_dev_t *hw, uart_word_length_t *data_bit)
+FORCE_INLINE_ATTR void uart_ll_get_data_bit_num(uart_dev_t *hw, uart_word_length_t *data_bit)
 {
     *data_bit = hw->conf0.bit_num;
 }
@@ -740,7 +741,7 @@ static inline void uart_ll_get_data_bit_num(uart_dev_t *hw, uart_word_length_t *
  *
  * @return True if the state machine is in the IDLE state, otherwise false is returned.
  */
-static inline bool uart_ll_is_tx_idle(uart_dev_t *hw)
+FORCE_INLINE_ATTR bool uart_ll_is_tx_idle(uart_dev_t *hw)
 {
     typeof(hw->status) status = hw->status;
     return ((status.txfifo_cnt == 0) && (status.st_utx_out == 0));
@@ -753,7 +754,7 @@ static inline bool uart_ll_is_tx_idle(uart_dev_t *hw)
  *
  * @return True if hw rts flow control is enabled, otherwise false is returned.
  */
-static inline bool uart_ll_is_hw_rts_en(uart_dev_t *hw)
+FORCE_INLINE_ATTR bool uart_ll_is_hw_rts_en(uart_dev_t *hw)
 {
     return hw->conf1.rx_flow_en;
 }
@@ -765,7 +766,7 @@ static inline bool uart_ll_is_hw_rts_en(uart_dev_t *hw)
  *
  * @return True if hw cts flow control is enabled, otherwise false is returned.
  */
-static inline bool uart_ll_is_hw_cts_en(uart_dev_t *hw)
+FORCE_INLINE_ATTR bool uart_ll_is_hw_cts_en(uart_dev_t *hw)
 {
     return hw->conf0.tx_flow_en;
 }
@@ -778,7 +779,7 @@ static inline bool uart_ll_is_hw_cts_en(uart_dev_t *hw)
  *
  * @return None
  */
-static inline void uart_ll_set_loop_back(uart_dev_t *hw, bool loop_back_en)
+FORCE_INLINE_ATTR void uart_ll_set_loop_back(uart_dev_t *hw, bool loop_back_en)
 {
     hw->conf0.loopback = loop_back_en;
 }
@@ -792,7 +793,7 @@ static inline void uart_ll_set_loop_back(uart_dev_t *hw, bool loop_back_en)
  *
  * @return None.
  */
-static inline void uart_ll_inverse_signal(uart_dev_t *hw, uint32_t inv_mask)
+FORCE_INLINE_ATTR void uart_ll_inverse_signal(uart_dev_t *hw, uint32_t inv_mask)
 {
     typeof(hw->conf0) conf0_reg = hw->conf0;
     conf0_reg.irda_tx_inv = (inv_mask & UART_SIGNAL_IRDA_TX_INV) ? 1 : 0;
@@ -804,6 +805,70 @@ static inline void uart_ll_inverse_signal(uart_dev_t *hw, uint32_t inv_mask)
     conf0_reg.rts_inv = (inv_mask & UART_SIGNAL_RTS_INV) ? 1 : 0;
     conf0_reg.dtr_inv = (inv_mask & UART_SIGNAL_DTR_INV) ? 1 : 0;
     hw->conf0.val = conf0_reg.val;
+}
+
+/**
+ * @brief  Configure the timeout value for receiver receiving a byte, and enable rx timeout function.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ * @param  tout_thr The timeout value as a bit time. The rx timeout function will be disabled if `tout_thr == 0`.
+ *
+ * @return None.
+ */
+FORCE_INLINE_ATTR void uart_ll_set_rx_tout(uart_dev_t *hw, uint16_t tout_thr)
+{
+    if (hw->conf0.tick_ref_always_on == 0) {
+        //Hardware issue workaround: when using ref_tick, the rx timeout threshold needs increase to 10 times.
+        //T_ref = T_apb * APB_CLK/(REF_TICK << CLKDIV_FRAG_BIT_WIDTH)
+        tout_thr = tout_thr * UART_LL_TOUT_REF_FACTOR_DEFAULT;
+    } else {
+        //If APB_CLK is used: counting rate is BAUD tick rate / 8
+        tout_thr = (tout_thr + 7) / 8;
+    }
+    if (tout_thr > 0) {
+        hw->conf1.rx_tout_thrhd = tout_thr;
+        hw->conf1.rx_tout_en = 1;
+    } else {
+        hw->conf1.rx_tout_en = 0;
+    }
+}
+
+/**
+ * @brief  Get the timeout value for receiver receiving a byte.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ *
+ * @return tout_thr The timeout threshold value. If timeout feature is disabled returns 0.
+ */
+FORCE_INLINE_ATTR uint16_t uart_ll_get_rx_tout_thr(uart_dev_t *hw)
+{
+    uint16_t tout_thrd = 0;
+    if (hw->conf1.rx_tout_en > 0) {
+        if (hw->conf0.tick_ref_always_on == 0) {
+            tout_thrd = (uint16_t)(hw->conf1.rx_tout_thrhd / UART_LL_TOUT_REF_FACTOR_DEFAULT);
+        } else {
+            tout_thrd = (uint16_t)(hw->conf1.rx_tout_thrhd  << 3);
+        }
+    }
+    return tout_thrd;
+}
+
+/**
+ * @brief  Get UART maximum timeout threshold.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ *
+ * @return maximum timeout threshold.
+ */
+FORCE_INLINE_ATTR uint16_t uart_ll_max_tout_thrd(uart_dev_t *hw)
+{
+    uint16_t tout_thrd = 0;
+    if (hw->conf0.tick_ref_always_on == 0) {
+        tout_thrd = (uint16_t)(UART_RX_TOUT_THRHD_V / UART_LL_TOUT_REF_FACTOR_DEFAULT);
+    } else {
+        tout_thrd = (uint16_t)(UART_RX_TOUT_THRHD_V  << 3);
+    }
+    return tout_thrd;
 }
 
 #undef UART_LL_TOUT_REF_FACTOR_DEFAULT

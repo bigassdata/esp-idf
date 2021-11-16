@@ -23,7 +23,6 @@
 #include "mbedtls/ecp.h"
 typedef struct crypto_bignum crypto_bignum;
 
-#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2)
 TEST_CASE("Test crypto lib bignum apis", "[wpa_crypto]")
 {
     {
@@ -35,7 +34,7 @@ TEST_CASE("Test crypto lib bignum apis", "[wpa_crypto]")
         crypto_bignum_deinit(bn, 1);
 
         /* BN - Binary to bignum & bignum to binary*/
-        TEST_ASSERT(!crypto_get_random(buf, 32));
+        TEST_ASSERT(!os_get_random(buf, 32));
 
         bn = crypto_bignum_init_set(buf, 32);
         TEST_ASSERT_NOT_NULL(bn);
@@ -279,7 +278,6 @@ TEST_CASE("Test crypto lib bignum apis", "[wpa_crypto]")
 
     }
 }
-#endif //!TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2)
 
 
 /*
@@ -368,7 +366,7 @@ TEST_CASE("Test crypto lib ECC apis", "[wpa_crypto]")
 
         /* Note this is just testing coversion & not whether point is
          * in the  group or not*/
-        TEST_ASSERT(!crypto_get_random(pt1, 64));
+        TEST_ASSERT(!os_get_random(pt1, 64));
 
         p = crypto_ec_point_from_bin(e, pt1);
 

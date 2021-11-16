@@ -80,6 +80,11 @@ static uint32_t s_ccount_div;
 static uint32_t s_ccount_mul;
 
 #if CONFIG_FREERTOS_USE_TICKLESS_IDLE
+#define PERIPH_SKIP_LIGHT_SLEEP_NO 1
+
+/* Indicates if light sleep shoule be skipped by peripherals. */
+static skip_light_sleep_cb_t s_periph_skip_light_sleep_cb[PERIPH_SKIP_LIGHT_SLEEP_NO];
+
 /* Indicates if light sleep entry was skipped in vApplicationSleep for given CPU.
  * This in turn gets used in IDLE hook to decide if `waiti` needs
  * to be invoked or not.
@@ -222,6 +227,23 @@ esp_err_t esp_pm_configure(const void* vconfig)
     s_cpu_freq_by_mode[PM_MODE_LIGHT_SLEEP] = s_cpu_freq_by_mode[PM_MODE_APB_MIN];
     s_light_sleep_en = config->light_sleep_enable;
     s_config_changed = true;
+    portEXIT_CRITICAL(&s_switch_lock);
+
+    return ESP_OK;
+}
+
+esp_err_t esp_pm_get_configuration(void* vconfig)
+{
+    if (vconfig == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_pm_config_esp32s2_t* config = (esp_pm_config_esp32s2_t*) vconfig;
+
+    portENTER_CRITICAL(&s_switch_lock);
+    config->light_sleep_enable = s_light_sleep_en;
+    config->max_freq_mhz = s_cpu_freq_by_mode[PM_MODE_CPU_MAX].freq_mhz;
+    config->min_freq_mhz = s_cpu_freq_by_mode[PM_MODE_APB_MIN].freq_mhz;
     portEXIT_CRITICAL(&s_switch_lock);
 
     return ESP_OK;
@@ -477,6 +499,42 @@ void esp_pm_impl_waiti(void)
 
 #if CONFIG_FREERTOS_USE_TICKLESS_IDLE
 
+esp_err_t esp_pm_register_skip_light_sleep_callback(skip_light_sleep_cb_t cb)
+{
+    for (int i = 0; i < PERIPH_SKIP_LIGHT_SLEEP_NO; i++) {
+        if (s_periph_skip_light_sleep_cb[i] == cb) {
+            return ESP_OK;
+        } else if (s_periph_skip_light_sleep_cb[i] == NULL) {
+            s_periph_skip_light_sleep_cb[i] = cb;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NO_MEM;
+}
+
+esp_err_t esp_pm_unregister_skip_light_sleep_callback(skip_light_sleep_cb_t cb)
+{
+    for (int i = 0; i < PERIPH_SKIP_LIGHT_SLEEP_NO; i++) {
+        if (s_periph_skip_light_sleep_cb[i] == cb) {
+            s_periph_skip_light_sleep_cb[i] = NULL;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_INVALID_STATE;
+}
+
+static inline bool IRAM_ATTR periph_should_skip_light_sleep(void)
+{
+    for (int i = 0; i < PERIPH_SKIP_LIGHT_SLEEP_NO; i++) {
+        if (s_periph_skip_light_sleep_cb[i]) {
+            if (s_periph_skip_light_sleep_cb[i]() == true) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static inline bool IRAM_ATTR should_skip_light_sleep(int core_id)
 {
 #if portNUM_PROCESSORS == 2
@@ -486,7 +544,7 @@ static inline bool IRAM_ATTR should_skip_light_sleep(int core_id)
         return true;
     }
 #endif // portNUM_PROCESSORS == 2
-    if (s_mode != PM_MODE_LIGHT_SLEEP || s_is_switching) {
+    if (s_mode != PM_MODE_LIGHT_SLEEP || s_is_switching || periph_should_skip_light_sleep()) {
         s_skipped_light_sleep[core_id] = true;
     } else {
         s_skipped_light_sleep[core_id] = false;

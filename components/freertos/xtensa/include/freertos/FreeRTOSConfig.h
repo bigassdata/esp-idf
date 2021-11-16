@@ -181,21 +181,51 @@ int xt_clock_freq(void) __attribute__((deprecated));
 #define configMAX_PRIORITIES			( 25 )
 #endif
 
-#ifndef CONFIG_APPTRACE_ENABLE
-#define configMINIMAL_STACK_SIZE		768
+/* Various things that impact minimum stack sizes */
+
+/* Higher stack checker modes cause overhead on each function call */
+#if CONFIG_STACK_CHECK_ALL || CONFIG_STACK_CHECK_STRONG
+#define configSTACK_OVERHEAD_CHECKER 256
 #else
-/* apptrace module requires at least 2KB of stack per task */
-#define configMINIMAL_STACK_SIZE		2048
+#define configSTACK_OVERHEAD_CHECKER 0
 #endif
+
+/* with optimizations disabled, scheduler uses additional stack */
+#if CONFIG_COMPILER_OPTIMIZATION_NONE
+#define configSTACK_OVERHEAD_OPTIMIZATION 320
+#else
+#define configSTACK_OVERHEAD_OPTIMIZATION 0
+#endif
+
+/* apptrace mdule increases minimum stack usage */
+#if CONFIG_APPTRACE_ENABLE
+#define configSTACK_OVERHEAD_APPTRACE 1280
+#else
+#define configSTACK_OVERHEAD_APPTRACE 0
+#endif
+
+#define configSTACK_OVERHEAD_TOTAL (                                    \
+                                    configSTACK_OVERHEAD_CHECKER +      \
+                                    configSTACK_OVERHEAD_OPTIMIZATION + \
+                                    configSTACK_OVERHEAD_APPTRACE       \
+                                                                        )
+
+#define configMINIMAL_STACK_SIZE  (768 + configSTACK_OVERHEAD_TOTAL)
 
 #ifndef configIDLE_TASK_STACK_SIZE
 #define configIDLE_TASK_STACK_SIZE CONFIG_FREERTOS_IDLE_TASK_STACKSIZE
 #endif
 
-/* The Xtensa port uses a separate interrupt stack. Adjust the stack size */
-/* to suit the needs of your specific application.                        */
+/* Stack alignment, architecture specifc. Must be a power of two. */
+#define configSTACK_ALIGNMENT			16
+
+/* The Xtensa port uses a separate interrupt stack. Adjust the stack size
+ * to suit the needs of your specific application.
+ * Size needs to be aligned to the stack increment, since the location of
+ * the stack for the 2nd CPU will be calculated using configISR_STACK_SIZE.
+ */
 #ifndef configISR_STACK_SIZE
-#define configISR_STACK_SIZE			CONFIG_FREERTOS_ISR_STACKSIZE
+#define configISR_STACK_SIZE			((CONFIG_FREERTOS_ISR_STACKSIZE + configSTACK_ALIGNMENT - 1) & (~(configSTACK_ALIGNMENT - 1)))
 #endif
 
 /* Minimal heap size to make sure examples can run on memory limited

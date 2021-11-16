@@ -1640,15 +1640,16 @@ int wps_build_cred(struct wps_data *wps, struct wpabuf *msg)
 		if (random_get_bytes(r, sizeof(r)) < 0)
 			return -1;
 		os_free(wps->new_psk);
+		wps->new_psk = (u8 *)base64_encode(r, sizeof(r), &wps->new_psk_len);
 		if (wps->new_psk == NULL)
 			return -1;
 		wps->new_psk_len--; /* remove newline */
 		while (wps->new_psk_len &&
-		       wps->new_psk[wps->new_psk_len - 1] == '=')
+		       wps->new_psk[wps->new_psk_len - 1] == '=')	// NOLINT(clang-analyzer-unix.Malloc)
 			wps->new_psk_len--;
 		wpa_hexdump_ascii_key(MSG_DEBUG, "WPS: Generated passphrase",
 				      wps->new_psk, wps->new_psk_len);
-		os_memcpy(wps->cred.key, wps->new_psk, wps->new_psk_len);
+		os_memcpy(wps->cred.key, wps->new_psk, wps->new_psk_len);	// NOLINT(clang-analyzer-unix.Malloc)
 		wps->cred.key_len = wps->new_psk_len;
 	} else if (wps->use_psk_key && wps->wps->psk_set) {
 		char hex[65];

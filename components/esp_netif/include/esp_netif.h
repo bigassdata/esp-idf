@@ -403,6 +403,22 @@ esp_err_t esp_netif_set_old_ip_info(esp_netif_t *esp_netif, const esp_netif_ip_i
 int esp_netif_get_netif_impl_index(esp_netif_t *esp_netif);
 
 /**
+ * @brief  Get net interface name from network stack implementation
+ *
+ * @note This name could be used in `setsockopt()` to bind socket with appropriate interface
+ *
+ * @param[in]  esp_netif Handle to esp-netif instance
+ * @param[out]  name Interface name as specified in underlying TCP/IP stack. Note that the
+ * actual name will be copied to the specified buffer, which must be allocated to hold
+ * maximum interface name size (6 characters for lwIP)
+ *
+ * @return
+ *         - ESP_OK
+ *         - ESP_ERR_ESP_NETIF_INVALID_PARAMS
+*/
+esp_err_t esp_netif_get_netif_impl_name(esp_netif_t *esp_netif, char* name);
+
+/**
  * @}
  */
 
@@ -649,6 +665,17 @@ esp_err_t esp_netif_get_ip6_linklocal(esp_netif_t *esp_netif, esp_ip6_addr_t *if
 esp_err_t esp_netif_get_ip6_global(esp_netif_t *esp_netif, esp_ip6_addr_t *if_ip6);
 
 /**
+ * @brief  Get all IPv6 addresses of the specified interface
+ *
+ * @param[in]  esp_netif Handle to esp-netif instance
+ * @param[out] if_ip6 Array of IPv6 addresses will be copied to the argument
+ *
+ * @return
+ *      number of returned IPv6 addresses
+ */
+int esp_netif_get_all_ip6(esp_netif_t *esp_netif, esp_ip6_addr_t if_ip6[]);
+
+/**
  * @brief Sets IPv4 address to the specified octets
  *
  * @param[out] addr IP address to be set
@@ -787,6 +814,22 @@ esp_netif_t *esp_netif_next(esp_netif_t *esp_netif);
  * @return Number of esp_netifs
  */
 size_t esp_netif_get_nr_of_ifs(void);
+
+/**
+ * @brief increase the reference counter of net stack buffer
+ *
+ * @param[in]  netstack_buf the net stack buffer
+ *
+ */
+void esp_netif_netstack_buf_ref(void *netstack_buf);
+
+/**
+ * @brief free the netstack buffer
+ *
+ * @param[in]  netstack_buf the net stack buffer
+ *
+ */
+void esp_netif_netstack_buf_free(void *netstack_buf);
 
 /**
  * @}

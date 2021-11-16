@@ -116,22 +116,22 @@ static const int16_t sine_int16[] = {
 -19260,  -17557,  -15786,  -13952,  -12062,  -10126,   -8149,   -6140,   -4107,   -2057,
 };
 
-#define TABLE_SIZE_CVSD   100
+#define TABLE_SIZE_CVSD         100
+#define TABLE_SIZE_CVSD_BYTE    200
 static uint32_t bt_app_hf_outgoing_cb(uint8_t *p_buf, uint32_t sz)
 {
-    int sine_phase = esp_random();
+    static int index = 0;
+    uint8_t *data = (uint8_t *)sine_int16;
 
-    for (int i = 0; i < TABLE_SIZE_CVSD; i++) {
-        p_buf[i * 2]     = sine_int16[sine_phase];
-        p_buf[i * 2 + 1] = sine_int16[sine_phase];
-        ++sine_phase;
-        if (sine_phase >= TABLE_SIZE_CVSD) {
-            sine_phase -= TABLE_SIZE_CVSD;
+    for (uint32_t i = 0; i < sz; i++) {
+        p_buf[i] = data[index++];
+        if (index >= TABLE_SIZE_CVSD_BYTE) {
+            index -= TABLE_SIZE_CVSD_BYTE;
         }
     }
     return sz;
 }
- 
+
 static void bt_app_hf_incoming_cb(const uint8_t *buf, uint32_t sz)
 {
     // direct to i2s

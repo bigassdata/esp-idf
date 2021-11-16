@@ -139,6 +139,13 @@ function run_tests()
     rm -f sdkconfig
     rm -f ${TESTDIR}/template/version.txt
 
+    print_status "Use IDF version variables in component CMakeLists.txt file"
+    clean_build_dir
+    (echo -e "if (NOT IDF_VERSION_MAJOR)\n message(FATAL_ERROR \"IDF version not set\")\n endif()" \
+        && cat main/CMakeLists.txt) > main/CMakeLists.new && mv main/CMakeLists.new main/CMakeLists.txt
+    idf.py reconfigure || failure "Failed to use IDF_VERSION_MAJOR in component CMakeLists.txt"
+    git checkout -- main/CMakeLists.txt
+
     print_status "Moving BUILD_DIR_BASE out of tree"
     clean_build_dir
     OUTOFTREE_BUILD=${TESTDIR}/alt_build
@@ -353,6 +360,13 @@ function run_tests()
     grep "CONFIG_IDF_TARGET=\"${other_target}\"" sdkconfig || failure "Project not configured correctly using idf.py set-target"
     grep "IDF_TARGET:STRING=${other_target}" build/CMakeCache.txt || failure "IDF_TARGET not set in CMakeCache.txt using idf.py set-target"
 
+    print_status "idf.py understands alternative target names"
+    clean_build_dir
+    rm sdkconfig
+    idf.py set-target ESP32-S2
+    grep "CONFIG_IDF_TARGET=\"${other_target}\"" sdkconfig || failure "Project not configured correctly using idf.py set-target"
+    grep "IDF_TARGET:STRING=${other_target}" build/CMakeCache.txt || failure "IDF_TARGET not set in CMakeCache.txt using idf.py set-target"
+
     print_status "Can guess target from sdkconfig, if CMakeCache does not exist"
     idf.py fullclean || failure "Failed to clean the build directory"
     idf.py reconfigure || failure "Failed to reconfigure after fullclean"
@@ -440,28 +454,61 @@ function run_tests()
     grep "CONFIG_PARTITION_TABLE_TWO_OTA=y" sdkconfig || failure "The define from sdkconfig should be into sdkconfig"
     rm sdkconfig sdkconfig.defaults sdkconfig.defaults.esp32
 
+    print_status "Test if it can build the example to run on host"
+    pushd $IDF_PATH/examples/build_system/cmake/idf_as_lib
+    (set -euo pipefail && source build.sh)
+    popd
+    rm -r $IDF_PATH/examples/build_system/cmake/idf_as_lib/build
+
     print_status "Building a project with CMake library imported and PSRAM workaround, all files compile with workaround"
     # Test for libraries compiled within ESP-IDF
-    rm -rf build
+    rm -r build sdkconfig
     echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" >> sdkconfig.defaults
     echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> sdkconfig.defaults
     # note: we do 'reconfigure' here, as we just need to run cmake
     idf.py -C $IDF_PATH/examples/build_system/cmake/import_lib -B `pwd`/build -D SDKCONFIG_DEFAULTS="`pwd`/sdkconfig.defaults" reconfigure
     grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
     (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-issue) && failure "All commands in compile_commands.json should use PSRAM cache workaround"
-    rm -r sdkconfig.defaults build
-    # Test for external libraries in custom CMake projects with ESP-IDF components linked
-    mkdir build && touch build/sdkconfig
-    echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" >> build/sdkconfig
-    echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> build/sdkconfig
+    rm -r build sdkconfig sdkconfig.defaults
+
+    print_status "Test for external libraries in custom CMake projects with ESP-IDF components linked"
+    mkdir build
+    IDF_AS_LIB=$IDF_PATH/examples/build_system/cmake/idf_as_lib
+    echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" > $IDF_AS_LIB/sdkconfig
+    echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> $IDF_AS_LIB/sdkconfig
     # note: we just need to run cmake
-    (cd build && cmake $IDF_PATH/examples/build_system/cmake/idf_as_lib -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32)
+    (cd build && cmake $IDF_AS_LIB -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32)
     grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
     (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-issue) && failure "All commands in compile_commands.json should use PSRAM cache workaround"
-    rm -r build
+
+    for strat in MEMW NOPS DUPLDST; do
+        print_status "Test for external libraries in custom CMake projects with PSRAM strategy $strat"
+        rm -r build sdkconfig sdkconfig.defaults sdkconfig.defaults.esp32
+        stratlc=`echo $strat | tr A-Z a-z`
+        echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" > sdkconfig.defaults
+        echo "CONFIG_SPIRAM_CACHE_WORKAROUND_STRATEGY_$strat=y"  >> sdkconfig.defaults
+        echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> sdkconfig.defaults
+        # note: we do 'reconfigure' here, as we just need to run cmake
+        idf.py reconfigure
+        grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
+        (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-strategy=$stratlc) && failure "All commands in compile_commands.json should use PSRAM cache workaround strategy"
+        echo ${PWD}
+        rm -r sdkconfig.defaults build
+    done
+
+    print_status "Cleaning Python bytecode"
+    idf.py clean > /dev/null
+    idf.py fullclean > /dev/null
+    if [ "$(find $IDF_PATH -name "*.py[co]" | wc -l)" -eq 0 ]; then
+        failure "No Python bytecode in IDF!"
+    fi
+    idf.py python-clean
+    if [ "$(find $IDF_PATH -name "*.py[co]" | wc -l)" -gt 0 ]; then
+        failure "Python bytecode isn't working!"
+    fi
 
     print_status "Displays partition table when executing target partition_table"
-    idf.py partition_table | grep -E "# Espressif .+ Partition Table"
+    idf.py partition_table | grep -E "# ESP-IDF .+ Partition Table"
     rm -r build
 
     print_status "Make sure a full build never runs '/usr/bin/env python' or similar"
@@ -646,6 +693,8 @@ endmenu\n" >> ${IDF_PATH}/Kconfig
 
     print_status "Compiles with dependencies delivered by component manager"
     clean_build_dir
+    # Make sure that component manager is not installed
+    pip uninstall -y idf_component_manager
     printf "\n#include \"test_component.h\"\n" >> main/main.c
     printf "dependencies:\n  test_component:\n    path: test_component\n    git: ${COMPONENT_MANAGER_TEST_REPO}\n" >> idf_project.yml
     ! idf.py build || failure "Build should fail if dependencies are not installed"
@@ -682,6 +731,36 @@ endmenu\n" >> ${IDF_PATH}/Kconfig
     idf.py bootloader || failure "Failed to build bootloader"
     bin_header_match build/bootloader/bootloader.bin "021f"
     rm sdkconfig
+
+    print_status "DFU build works"
+    rm -f -r build sdkconfig
+    idf.py dfu &> tmp.log
+    grep "command \"dfu\" is not known to idf.py and is not a Ninja target" tmp.log || (tail -n 100 tmp.log ; failure "DFU build should fail for default chip target")
+    idf.py set-target esp32s2
+    idf.py dfu &> tmp.log
+    grep "build/dfu.bin\" has been written. You may proceed with DFU flashing." tmp.log || (tail -n 100 tmp.log ; failure "DFU build should succeed for esp32s2")
+    rm tmp.log
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN} "dfu.bin"
+    rm -rf build sdkconfig
+
+    print_status "Loadable ELF build works"
+    echo "CONFIG_APP_BUILD_TYPE_ELF_RAM=y" > sdkconfig
+    idf.py reconfigure || failure "Couldn't configure for loadable ELF file"
+    test -f build/flasher_args.json && failure "flasher_args.json should not be generated in a loadable ELF build"
+    idf.py build || failure "Couldn't build a loadable ELF file"
+
+    print_status "Defaults set properly for unspecified idf_build_process args"
+    pushd $IDF_PATH/examples/build_system/cmake/idf_as_lib
+    cp CMakeLists.txt CMakeLists.txt.bak
+    echo -e "\nidf_build_get_property(project_dir PROJECT_DIR)" >> CMakeLists.txt
+    echo -e "\nmessage(\"Project directory: \${project_dir}\")" >> CMakeLists.txt
+    mkdir build && cd build
+    cmake .. -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32 &> log.txt
+    grep "Project directory: $IDF_PATH/examples/build_system/cmake/idf_as_lib" log.txt || failure "PROJECT_DIR default was not set"
+    cd ..
+    mv CMakeLists.txt.bak CMakeLists.txt
+    rm -rf build
+    popd
 
     print_status "All tests completed"
     if [ -n "${FAILURES}" ]; then

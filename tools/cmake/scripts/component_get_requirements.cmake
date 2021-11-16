@@ -12,6 +12,7 @@ endfunction()
 
 idf_build_get_property(idf_path IDF_PATH)
 include(${idf_path}/tools/cmake/utilities.cmake)
+include(${idf_path}/tools/cmake/version.cmake)
 
 function(__component_get_property var component_target property)
     set(_property __component_${component_target}_${property})
@@ -87,7 +88,7 @@ foreach(__component_target ${__component_targets})
         list(REMOVE_ITEM __component_requires ${__component_alias} ${__component_name})
     endif()
 
-    if(__component_requires)
+    if(__component_priv_requires)
         list(REMOVE_DUPLICATES __component_priv_requires)
         list(REMOVE_ITEM __component_priv_requires ${__component_alias} ${__component_name})
     endif()

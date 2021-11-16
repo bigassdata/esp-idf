@@ -46,19 +46,17 @@ Crashed task handle: 0x3ffb5e80, name: '', GDB name: 'process 1073438336'
 ================== CURRENT THREAD REGISTERS ===================
 exccause       0x1d (StoreProhibitedCause)
 excvaddr       0x1
-epc1           0x0
+epc1           0x400e38bf
 epc2           0x0
 epc3           0x0
 epc4           0x0
 epc5           0x0
 epc6           0x0
-epc7           0x0
 eps2           0x0
 eps3           0x0
 eps4           0x0
 eps5           0x0
 eps6           0x0
-eps7           0x400e38bf
 pc             0x400e37f7	0x400e37f7
 lbeg           0x0	0
 lend           0x0	0
@@ -114,6 +112,12 @@ a15            0x0	0
   8    process 1073413520 0x400812c4 in ?? ()
 ERROR: GDB/MI command failed (error / msg="No symbol table is loaded.  Use the \"file\" command.")!
 
+==================== THREAD 1 (TCB: 0x3ffb5e80, name: '') =====================
+#0  0x400e37f7 in ?? ()
+#1  0x400d0c31 in ?? ()
+#2  0x40087018 in ?? ()
+ERROR: GDB/MI command failed (error / msg="No symbol table is loaded.  Use the \"file\" command.")!
+
 ==================== THREAD 2 (TCB: 0x3ffb6d48, name: '') =====================
 #0  0x40087010 in ?? ()
 ERROR: GDB/MI command failed (error / msg="No symbol table is loaded.  Use the \"file\" command.")!
@@ -154,6 +158,7 @@ ERROR: GDB/MI command failed (error / msg="No symbol table is loaded.  Use the \
 #1  0x40087e10 in ?? ()
 #2  0x40081a2b in ?? ()
 #3  0x40087018 in ?? ()
+
 
 ======================= ALL MEMORY REGIONS ========================
 Name   Address   Size   Attrs

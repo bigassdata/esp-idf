@@ -61,6 +61,7 @@ ESP32 采用 40 nm 工艺制成，具有最佳的功耗性能、射频性能、�
     ESP-WROVER-KIT <../hw-reference/esp32/get-started-wrover-kit>
     ESP32-PICO-KIT <../hw-reference/esp32/get-started-pico-kit>
     ESP32-Ethernet-Kit <../hw-reference/esp32/get-started-ethernet-kit>
+    ESP32-DevKit-S(-R) <../hw-reference/esp32/user-guide-devkits-r-v1.1>
 
 
 .. _get-started-step-by-step-legacy:
@@ -435,5 +436,6 @@ Windows 操作系统
     ../api-guides/tools/idf-monitor
     toolchain-setup-scratch
 
-.. _Stable version: https://docs.espressif.com/projects/esp-idf/zh_CN/stable/
+.. Note: These two targets may be used from git-clone-notes.inc depending on version, don't remove
+.. _Stable version: https://docs.espressif.com/projects/esp-idf/en/stable/
 .. _Releases page: https://github.com/espressif/esp-idf/releases

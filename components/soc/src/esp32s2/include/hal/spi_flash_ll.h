@@ -23,7 +23,9 @@
 #pragma once
 
 #include "gpspi_flash_ll.h"
+#include "soc/spi_struct.h"
 #include "spimem_flash_ll.h"
+#include "hal/hal_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +43,12 @@ extern "C" {
 #define spi_flash_ll_get_hw(host_id)  (((host_id)<=SPI1_HOST ? (spi_dev_t*) spimem_flash_ll_get_hw(host_id) \
                                       : gpspi_flash_ll_get_hw(host_id)))
 
+#define spi_flash_ll_hw_get_id(dev) ({int dev_id = spimem_flash_ll_hw_get_id(dev); \
+                                     if (dev_id < 0) {\
+                                        dev_id = gpspi_flash_ll_hw_get_id(dev);\
+                                     }\
+                                     dev_id; \
+                                    })
 
 typedef union  {
     gpspi_flash_ll_clock_reg_t gpspi;
@@ -67,6 +75,7 @@ typedef union  {
 #define spi_flash_ll_set_usr_address(dev, addr, bitlen)      gpspi_flash_ll_set_usr_address((spi_dev_t*)dev, addr, bitlen)
 #define spi_flash_ll_set_dummy(dev, dummy)                   gpspi_flash_ll_set_dummy((spi_dev_t*)dev, dummy)
 #define spi_flash_ll_set_dummy_out(dev, en, lev)             gpspi_flash_ll_set_dummy_out((spi_dev_t*)dev, en, lev)
+#define spi_flash_ll_set_cs_setup(dev, cs_setup_time)        gpspi_flash_ll_set_cs_setup((spi_dev_t*)dev, cs_setup_time)
 #else
 #define spi_flash_ll_reset(dev)                              spimem_flash_ll_reset((spi_mem_dev_t*)dev)
 #define spi_flash_ll_cmd_is_done(dev)                        spimem_flash_ll_cmd_is_done((spi_mem_dev_t*)dev)
@@ -92,6 +101,7 @@ typedef union  {
 #define spi_flash_ll_set_usr_address(dev, addr, bitlen)      spimem_flash_ll_set_address((spi_mem_dev_t*)dev, addr)
 #define spi_flash_ll_set_dummy(dev, dummy)                   spimem_flash_ll_set_dummy((spi_mem_dev_t*)dev, dummy)
 #define spi_flash_ll_set_dummy_out(dev, en, lev)             spimem_flash_ll_set_dummy_out((spi_mem_dev_t*)dev, en, lev)
+#define spi_flash_ll_set_cs_setup(dev, cs_setup_time)        spimem_flash_ll_set_cs_setup((spi_mem_dev_t*)dev, cs_setup_time)
 #endif
 
 #ifdef __cplusplus
