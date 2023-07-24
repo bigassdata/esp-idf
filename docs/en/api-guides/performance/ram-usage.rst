@@ -39,6 +39,7 @@ To minimize static memory use:
 
    - Declare structures, buffers, or other variables ``const`` whenever possible. Constant data can be stored in flash not RAM. This may require changing functions in the firmware to take ``const *`` arguments instead of mutable pointer arguments. These changes can also reduce the stack usage of some functions.
    :SOC_BT_SUPPORTED: - If using Bluedroid, setting the option :ref:`CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY` will cause Bluedroid to allocate memory on initialization and free it on deinitialization. This doesn't necessarily reduce the peak memory usage, but changes it from static memory usage to runtime memory usage.
+   - If :doc:`Coredump </api-guides/core_dump>` component is enabled, `ESP_COREDUMP_LOG` macros will use ~5KB internal memory to place strings into DRAM. By disabling :ref:`CONFIG_ESP_COREDUMP_LOGS` option, these logs are disabled and the memory is reclaimed.
 
 .. _optimize-stack-sizes:
 
@@ -135,6 +136,7 @@ The following options will reduce IRAM usage of some ESP-IDF features:
     - Disable Wi-Fi options :ref:`CONFIG_ESP32_WIFI_IRAM_OPT` and/or :ref:`CONFIG_ESP32_WIFI_RX_IRAM_OPT`. Disabling these options will free available IRAM at the cost of Wi-Fi performance.
     :esp32c3 or esp32s3: - :ref:`CONFIG_SPI_FLASH_ROM_IMPL` enabling this option will free some IRAM but will mean that esp_flash bugfixes and new flash chip support is not available.
     :esp32: - :ref:`CONFIG_SPI_FLASH_ROM_DRIVER_PATCH` disabling this option will free some IRAM but is only available in some flash configurations (see the configuration item help text).
+    :esp32: - If the application uses PSRAM and is based on ESP32 rev. 3 (ECO3), setting :ref:`CONFIG_ESP32_REV_MIN` to ``3`` will disable PSRAM bug workarounds, saving ~10kB or more of IRAM.
     - Disabling :ref:`CONFIG_ESP_EVENT_POST_FROM_IRAM_ISR` prevents posting ``esp_event`` events from :ref:`iram-safe-interrupt-handlers` but will save some IRAM.
     - Disabling :ref:`CONFIG_SPI_MASTER_ISR_IN_IRAM` prevents spi_master interrupts from being serviced while writing to flash, and may otherwise reduce spi_master performance, but will save some IRAM.
     - Setting :ref:`CONFIG_HAL_DEFAULT_ASSERTION_LEVEL` to disable assertion for HAL component will save some IRAM especially for HAL code who calls `HAL_ASSERT` a lot and resides in IRAM.

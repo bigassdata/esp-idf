@@ -112,6 +112,7 @@ struct wpa_funcs {
     bool (*wpa_sta_init)(void);
     bool (*wpa_sta_deinit)(void);
     int (*wpa_sta_connect)(uint8_t *bssid);
+    void (*wpa_sta_connected_cb)(uint8_t *bssid);
     void (*wpa_sta_disconnected_cb)(uint8_t reason_code);
     int (*wpa_sta_rx_eapol)(u8 *src_addr, u8 *buf, u32 len);
     bool (*wpa_sta_in_4way_handshake)(void);
@@ -273,5 +274,6 @@ bool esp_wifi_is_mbo_enabled_internal(uint8_t if_index);
 uint8_t esp_wifi_sta_get_config_sae_pwe_h2e_internal(void);
 uint8_t esp_wifi_sta_get_use_h2e_internal(void);
 void esp_wifi_sta_disable_wpa2_authmode_internal(void);
+bool esp_wifi_eb_tx_status_success_internal(void *eb);
 
 #endif /* _ESP_WIFI_DRIVER_H_ */

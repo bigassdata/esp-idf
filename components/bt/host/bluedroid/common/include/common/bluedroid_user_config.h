@@ -18,6 +18,7 @@
 /* All the configuration from SDK defined here */
 #include "bt_common.h"
 #include "bt_user_config.h"
+#include "soc/soc_caps.h"
 
 /**********************************************************
  * Thread/Task reference
@@ -105,7 +106,11 @@
 #ifdef CONFIG_BT_BLE_RPA_SUPPORTED
 #define UC_BT_BLE_RPA_SUPPORTED            CONFIG_BT_BLE_RPA_SUPPORTED
 #else
+#if SOC_BLE_DEVICE_PRIVACY_SUPPORTED
+#define UC_BT_BLE_RPA_SUPPORTED            TRUE
+#else
 #define UC_BT_BLE_RPA_SUPPORTED            FALSE
+#endif
 #endif
 
 #ifdef CONFIG_BT_BLE_50_FEATURES_SUPPORTED
@@ -135,6 +140,12 @@
 #endif
 
 //GATTC CACHE
+#ifdef CONFIG_BT_GATTC_MAX_CACHE_CHAR
+#define UC_BT_GATTC_MAX_CACHE_CHAR      CONFIG_BT_GATTC_MAX_CACHE_CHAR
+#else
+#define UC_BT_GATTC_MAX_CACHE_CHAR      40
+#endif
+
 #ifdef CONFIG_BT_GATTC_CACHE_NVS_FLASH
 #define UC_BT_GATTC_CACHE_NVS_FLASH_ENABLED    CONFIG_BT_GATTC_CACHE_NVS_FLASH
 #else
@@ -266,6 +277,11 @@
 #define UC_CONFIG_BT_GATT_MAX_SR_PROFILES       8
 #endif
 
+#ifdef CONFIG_BT_GATT_MAX_SR_ATTRIBUTES
+#define UC_CONFIG_BT_GATT_MAX_SR_ATTRIBUTES     CONFIG_BT_GATT_MAX_SR_ATTRIBUTES
+#else
+#define UC_CONFIG_BT_GATT_MAX_SR_ATTRIBUTES     100
+#endif
 
 #ifdef CONFIG_BT_GATTS_SEND_SERVICE_CHANGE_MODE
 #define UC_BT_GATTS_SEND_SERVICE_CHANGE_MODE    CONFIG_BT_GATTS_SEND_SERVICE_CHANGE_MODE

@@ -51,6 +51,7 @@ INPUT = \
     $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_a2dp_api.h \
     $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_avrc_api.h \
     $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_spp_api.h \
+    $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_hidd_api.h \
     $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_hf_defs.h \
     $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_hf_client_api.h \
     $(PROJECT_PATH)/components/bt/host/bluedroid/api/include/api/esp_hf_ag_api.h \
@@ -112,6 +113,7 @@ INPUT = \
     $(PROJECT_PATH)/components/hal/include/hal/twai_types.h \
     $(PROJECT_PATH)/components/driver/include/driver/twai.h \
     $(PROJECT_PATH)/components/hal/include/hal/uart_types.h \
+    $(PROJECT_PATH)/components/hal/include/hal/efuse_hal.h \
     $(PROJECT_PATH)/components/soc/$(IDF_TARGET)/include/soc/uart_channel.h \
     $(PROJECT_PATH)/components/driver/include/driver/uart.h \
     $(PROJECT_PATH)/components/esp_netif/include/esp_netif.h \
@@ -212,9 +214,6 @@ INPUT = \
     $(PROJECT_PATH)/components/esp_ringbuf/include/freertos/ringbuf.h \
     $(PROJECT_PATH)/components/esp_common/include/esp_err.h \
     $(PROJECT_PATH)/components/esp_common/include/esp_check.h \
-    $(PROJECT_PATH)/components/freemodbus/common/include/esp_modbus_common.h \
-    $(PROJECT_PATH)/components/freemodbus/common/include/esp_modbus_slave.h \
-    $(PROJECT_PATH)/components/freemodbus/common/include/esp_modbus_master.h \
     $(PROJECT_PATH)/components/perfmon/include/xtensa_perfmon_access.h \
     $(PROJECT_PATH)/components/perfmon/include/xtensa_perfmon_apis.h \
     $(PROJECT_PATH)/components/perfmon/include/xtensa_perfmon_masks.h \
@@ -238,7 +237,8 @@ PREDEFINED             = \
     $(ENV_DOXYGEN_DEFINES) \
     __DOXYGEN__=1 \
     __attribute__(x)= \
-	_Static_assert()= \
+    _Static_assert()= \
+    ESP_STATIC_ASSERT()= \
     IDF_DEPRECATED(X)= \
     IRAM_ATTR= \
     configSUPPORT_DYNAMIC_ALLOCATION=1 \

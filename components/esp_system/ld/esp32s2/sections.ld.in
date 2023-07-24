@@ -71,7 +71,7 @@ SECTIONS
 
     mapping[rtc_data]
 
-    *rtc_wake_stub*.*(.data .rodata .data.* .rodata.* .bss .bss.*)
+    *rtc_wake_stub*.*(.data .rodata .data.* .rodata.*)
     _rtc_data_end = ABSOLUTE(.);
   } > rtc_data_location
 
@@ -188,7 +188,6 @@ SECTIONS
     /* iram_end_test section exists for use by memprot unit tests only */
     *(.iram_end_test)
     _iram_text_end = ABSOLUTE(.);
-    _iram_end = ABSOLUTE(.);
   } > iram0_0_seg
 
   .dram0_reserved_for_iram (NOLOAD):

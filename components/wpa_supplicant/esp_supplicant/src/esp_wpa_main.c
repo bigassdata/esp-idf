@@ -29,6 +29,7 @@
 #include "esp_wpa2.h"
 #include "esp_common_i.h"
 
+struct wpa_funcs *wpa_cb;
 void  wpa_install_key(enum wpa_alg alg, u8 *addr, int key_idx, int set_tx,
                       u8 *seq, size_t seq_len, u8 *key, size_t key_len, enum key_flag key_flag)
 {
@@ -175,6 +176,8 @@ int wpa_sta_connect(uint8_t *bssid)
             wpa_printf(MSG_DEBUG, "Rejecting bss, validation failed");
             return ret;
         }
+    } else if (esp_wifi_sta_get_prof_authmode_internal() == NONE_AUTH) {
+        esp_set_assoc_ie((uint8_t *)bssid, NULL, 0, false);
     }
 
     return 0;
@@ -182,7 +185,7 @@ int wpa_sta_connect(uint8_t *bssid)
 
 void wpa_config_done(void)
 {
-    /* used in future for setting scan and assoc IEs */
+    esp_set_scan_ie();
 }
 
 int wpa_parse_wpa_ie_wrapper(const u8 *wpa_ie, size_t wpa_ie_len, wifi_wpa_ie_t *data)
@@ -203,10 +206,14 @@ int wpa_parse_wpa_ie_wrapper(const u8 *wpa_ie, size_t wpa_ie_len, wifi_wpa_ie_t 
     return ret;
 }
 
+static void wpa_sta_connected_cb(uint8_t *bssid)
+{
+    supplicant_sta_conn_handler(bssid);
+}
+
 static void wpa_sta_disconnected_cb(uint8_t reason_code)
 {
     switch (reason_code) {
-        case WIFI_REASON_UNSPECIFIED:
         case WIFI_REASON_AUTH_EXPIRE:
         case WIFI_REASON_NOT_AUTHED:
         case WIFI_REASON_NOT_ASSOCED:
@@ -218,29 +225,17 @@ static void wpa_sta_disconnected_cb(uint8_t reason_code)
         case WIFI_REASON_HANDSHAKE_TIMEOUT:
             esp_wpa3_free_sae_data();
             wpa_sta_clear_curr_pmksa();
+            wpa_sm_notify_disassoc(&gWpaSm);
             break;
         default:
             break;
     }
+    supplicant_sta_disconn_handler();
 }
-
-#ifndef CONFIG_WPA_11KV_SUPPORT
-static inline int esp_supplicant_common_init(struct wpa_funcs *wpa_cb)
-{
-	wpa_cb->wpa_sta_rx_mgmt = NULL;
-	wpa_cb->wpa_sta_profile_match = NULL;
-
-	return 0;
-}
-static inline void esp_supplicant_common_deinit(void)
-{
-}
-#endif
 
 int esp_supplicant_init(void)
 {
     int ret = ESP_OK;
-    struct wpa_funcs *wpa_cb;
 
     wpa_cb = (struct wpa_funcs *)os_zalloc(sizeof(struct wpa_funcs));
     if (!wpa_cb) {
@@ -251,6 +246,7 @@ int esp_supplicant_init(void)
     wpa_cb->wpa_sta_deinit     = wpa_deattach;
     wpa_cb->wpa_sta_rx_eapol   = wpa_sm_rx_eapol;
     wpa_cb->wpa_sta_connect    = wpa_sta_connect;
+    wpa_cb->wpa_sta_connected_cb    = wpa_sta_connected_cb;
     wpa_cb->wpa_sta_disconnected_cb = wpa_sta_disconnected_cb;
     wpa_cb->wpa_sta_in_4way_handshake = wpa_sta_in_4way_handshake;
 

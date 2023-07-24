@@ -18,6 +18,9 @@
 #include "soc_log.h"
 #include "esp_efuse.h"
 #include "esp_efuse_table.h"
+#ifndef BOOTLOADER_BUILD
+#include "esp_private/sar_periph_ctrl.h"
+#endif
 
 __attribute__((unused)) static const char *TAG = "rtc_init";
 
@@ -152,7 +155,7 @@ void rtc_init(rtc_config_t cfg)
 #if !CONFIG_IDF_ENV_FPGA
     if (cfg.cali_ocode) {
         uint32_t rtc_calib_version = 0;
-        esp_efuse_read_field_blob(ESP_EFUSE_BLOCK2_VERSION, &rtc_calib_version, 32);
+        esp_efuse_read_field_blob(ESP_EFUSE_BLK_VERSION_MINOR, &rtc_calib_version, ESP_EFUSE_BLK_VERSION_MINOR[0]->bit_count); // IDF-5366
         if (rtc_calib_version == 2) {
             set_ocode_by_efuse(rtc_calib_version);
         } else {
@@ -163,6 +166,11 @@ void rtc_init(rtc_config_t cfg)
 
     REG_WRITE(RTC_CNTL_INT_ENA_REG, 0);
     REG_WRITE(RTC_CNTL_INT_CLR_REG, UINT32_MAX);
+
+#ifndef BOOTLOADER_BUILD
+    //initialise SAR related peripheral register settings
+    sar_periph_ctrl_init();
+#endif
 }
 
 rtc_vddsdio_config_t rtc_vddsdio_get_config(void)

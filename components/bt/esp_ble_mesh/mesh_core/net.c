@@ -673,7 +673,11 @@ bool bt_mesh_net_iv_update(uint32_t iv_index, bool iv_update)
             return false;
         }
 
-        if (iv_index > bt_mesh.iv_index + 1) {
+        if ((iv_index > bt_mesh.iv_index + 1)
+#if CONFIG_BLE_MESH_IVU_RECOVERY_IVI
+            || (iv_index == bt_mesh.iv_index + 1 && !iv_update)
+#endif
+            ) {
             BT_WARN("Performing IV Index Recovery");
             (void)memset(bt_mesh.rpl, 0, sizeof(bt_mesh.rpl));
             bt_mesh.iv_index = iv_index;
@@ -681,10 +685,12 @@ bool bt_mesh_net_iv_update(uint32_t iv_index, bool iv_update)
             goto do_update;
         }
 
+#if !CONFIG_BLE_MESH_IVU_RECOVERY_IVI
         if (iv_index == bt_mesh.iv_index + 1 && !iv_update) {
             BT_WARN("Ignoring new index in normal mode");
             return false;
         }
+#endif
 
         if (!iv_update) {
             /* Nothing to do */
@@ -1381,10 +1387,12 @@ int bt_mesh_net_decode(struct net_buf_simple *data, enum bt_mesh_net_if net_if,
     }
 
     /* For case MESH/NODE/RLY/BV-01-C, even the DST is RFU, it needs to be forwarded. */
+#if !CONFIG_BLE_MESH_BQB_TEST
     if (BLE_MESH_ADDR_IS_RFU(rx->ctx.recv_dst)) {
         BT_ERR("Destination address is RFU; dropping packet 0x%02x", rx->ctx.recv_dst);
         return -EBADMSG;
     }
+#endif
 
     if (net_if != BLE_MESH_NET_IF_LOCAL && bt_mesh_elem_find(rx->ctx.addr)) {
         BT_DBG("Dropping locally originated packet");
@@ -1463,6 +1471,11 @@ void bt_mesh_net_recv(struct net_buf_simple *data, int8_t rssi,
 
     /* Save the state so the buffer can later be relayed */
     net_buf_simple_save(&buf, &state);
+
+    BT_BQB(BLE_MESH_BQB_TEST_LOG_LEVEL_PRIMARY_ID_NODE | BLE_MESH_BQB_TEST_LOG_LEVEL_SUB_ID_NET,
+           "\nNetRecv: ctl: %d, src: %d, dst: %d, ttl: %d, data: 0x%s",
+           CTL(buf.data), SRC(buf.data), DST(buf.data), TTL(buf.data),
+           bt_hex(buf.data + BLE_MESH_NET_HDR_LEN, buf.len - BLE_MESH_NET_HDR_LEN));
 
     rx.local_match = (bt_mesh_fixed_group_match(rx.ctx.recv_dst) ||
                       bt_mesh_elem_find(rx.ctx.recv_dst));
@@ -1544,8 +1557,8 @@ void bt_mesh_net_start(void)
 
 #if defined(CONFIG_BLE_MESH_USE_DUPLICATE_SCAN)
     /* Add Mesh beacon type (Secure Network Beacon) to the exceptional list */
-    bt_mesh_update_exceptional_list(BLE_MESH_EXCEP_LIST_ADD,
-                                    BLE_MESH_EXCEP_INFO_MESH_BEACON, NULL);
+    bt_mesh_update_exceptional_list(BLE_MESH_EXCEP_LIST_SUB_CODE_ADD,
+                                    BLE_MESH_EXCEP_LIST_TYPE_MESH_BEACON, NULL);
 #endif
 
     if (IS_ENABLED(CONFIG_BLE_MESH_LOW_POWER)) {

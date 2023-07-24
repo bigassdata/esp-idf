@@ -22,6 +22,9 @@
 #include "esp_efuse.h"
 #include "esp_efuse_table.h"
 #include "esp_private/spi_flash_os.h"
+#ifndef BOOTLOADER_BUILD
+#include "esp_private/sar_periph_ctrl.h"
+#endif
 
 
 #define RTC_CNTL_MEM_FORCE_NOISO (RTC_CNTL_SLOWMEM_FORCE_NOISO | RTC_CNTL_FASTMEM_FORCE_NOISO)
@@ -79,7 +82,7 @@ void rtc_init(rtc_config_t cfg)
 
     if (cfg.cali_ocode) {
         uint32_t blk_ver_major = 0;
-        esp_err_t err = esp_efuse_read_field_blob(ESP_EFUSE_BLK_VER_MAJOR, &blk_ver_major, ESP_EFUSE_BLK_VER_MAJOR[0]->bit_count);
+        esp_err_t err = esp_efuse_read_field_blob(ESP_EFUSE_BLK_VERSION_MAJOR, &blk_ver_major, ESP_EFUSE_BLK_VERSION_MAJOR[0]->bit_count); // IDF-5366
         if (err != ESP_OK) {
             blk_ver_major = 0;
             SOC_LOGW(TAG, "efuse read fail, set default blk_ver_major: %d\n", blk_ver_major);
@@ -194,6 +197,11 @@ void rtc_init(rtc_config_t cfg)
 
     REG_WRITE(RTC_CNTL_INT_ENA_REG, 0);
     REG_WRITE(RTC_CNTL_INT_CLR_REG, UINT32_MAX);
+
+#ifndef BOOTLOADER_BUILD
+    //initialise SAR related peripheral register settings
+    sar_periph_ctrl_init();
+#endif
 }
 
 rtc_vddsdio_config_t rtc_vddsdio_get_config(void)
@@ -405,8 +413,8 @@ static void rtc_set_stored_dbias(void)
     4. save these values for reuse
     */
     uint32_t  blk_minor = 0, blk_major = 0;
-    esp_err_t err0 = esp_efuse_read_field_blob(ESP_EFUSE_BLK_VER_MINOR, &blk_minor, ESP_EFUSE_BLK_VER_MINOR[0]->bit_count);
-    esp_err_t err1 = esp_efuse_read_field_blob(ESP_EFUSE_BLK_VER_MAJOR, &blk_major, ESP_EFUSE_BLK_VER_MAJOR[0]->bit_count);
+    esp_err_t err0 = esp_efuse_read_field_blob(ESP_EFUSE_BLK_VERSION_MINOR, &blk_minor, ESP_EFUSE_BLK_VERSION_MINOR[0]->bit_count);
+    esp_err_t err1 = esp_efuse_read_field_blob(ESP_EFUSE_BLK_VERSION_MAJOR, &blk_major, ESP_EFUSE_BLK_VERSION_MAJOR[0]->bit_count);
     if ((err0 != ESP_OK) | (err1 != ESP_OK)) {
         blk_minor = 0;
         blk_major = 0;

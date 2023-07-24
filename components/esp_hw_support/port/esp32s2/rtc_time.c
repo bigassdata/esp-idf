@@ -9,6 +9,7 @@
 #include "soc/rtc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/timer_group_reg.h"
+#include "hal/rtc_cntl_ll.h"
 
 /* Calibration of RTC_SLOW_CLK is performed using a special feature of TIMG0.
  * This feature counts the number of XTAL clock cycles within a given number of
@@ -156,7 +157,10 @@ uint32_t rtc_clk_cal_internal(rtc_cal_sel_t cal_clk, uint32_t slowclk_cycles, ui
         REG_SET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_XTAL32K_EN, 1);
     }
 
+    bool clk8m_enabled = rtc_clk_8m_enabled();
+    bool clk8md256_enabled = rtc_clk_8md256_enabled();
     if (cal_clk == RTC_CAL_8MD256) {
+        rtc_clk_8m_enable(true, true);
         SET_PERI_REG_MASK(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_CLK8M_D256_EN);
     }
 
@@ -173,6 +177,7 @@ uint32_t rtc_clk_cal_internal(rtc_cal_sel_t cal_clk, uint32_t slowclk_cycles, ui
 
     if (cal_clk == RTC_CAL_8MD256) {
         CLEAR_PERI_REG_MASK(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_CLK8M_D256_EN);
+        rtc_clk_8m_enable(clk8m_enabled, clk8md256_enabled);
     }
 
     return cal_val;
@@ -226,10 +231,7 @@ uint64_t rtc_time_slowclk_to_us(uint64_t rtc_cycles, uint32_t period)
 
 uint64_t rtc_time_get(void)
 {
-    SET_PERI_REG_MASK(RTC_CNTL_TIME_UPDATE_REG, RTC_CNTL_TIME_UPDATE);
-    uint64_t t = READ_PERI_REG(RTC_CNTL_TIME0_REG);
-    t |= ((uint64_t) READ_PERI_REG(RTC_CNTL_TIME1_REG)) << 32;
-    return t;
+    return rtc_cntl_ll_get_rtc_time();
 }
 
 uint64_t rtc_light_slp_time_get(void)

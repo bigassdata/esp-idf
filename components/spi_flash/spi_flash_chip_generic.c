@@ -40,6 +40,16 @@ DRAM_ATTR const static flash_chip_dummy_t default_flash_chip_dummy = {
     .slowrd_dummy_bitlen = SPI_FLASH_SLOWRD_DUMMY_BITLEN,
 };
 
+DRAM_ATTR const static flash_chip_dummy_t hpm_flash_chip_dummy = {
+    .dio_dummy_bitlen = SPI_FLASH_DIO_HPM_DUMMY_BITLEN,
+    .qio_dummy_bitlen = SPI_FLASH_QIO_HPM_DUMMY_BITLEN,
+    .qout_dummy_bitlen = SPI_FLASH_QOUT_DUMMY_BITLEN,
+    .dout_dummy_bitlen = SPI_FLASH_DOUT_DUMMY_BITLEN,
+    .fastrd_dummy_bitlen = SPI_FLASH_FASTRD_DUMMY_BITLEN,
+    .slowrd_dummy_bitlen = SPI_FLASH_SLOWRD_DUMMY_BITLEN,
+};
+
+
 // These are the pointer to HW flash encryption. Default using hardware encryption.
 DRAM_ATTR static spi_flash_encryption_t esp_flash_encryption_default __attribute__((__unused__)) = {
     .flash_encryption_enable = spi_flash_encryption_hal_enable,
@@ -52,6 +62,8 @@ DRAM_ATTR static spi_flash_encryption_t esp_flash_encryption_default __attribute
 
 DRAM_ATTR flash_chip_dummy_t *rom_flash_chip_dummy = (flash_chip_dummy_t *)&default_flash_chip_dummy;
 
+DRAM_ATTR flash_chip_dummy_t *rom_flash_chip_dummy_hpm = (flash_chip_dummy_t *)&hpm_flash_chip_dummy;
+
 #define SPI_FLASH_DEFAULT_IDLE_TIMEOUT_MS           200
 #define SPI_FLASH_GENERIC_CHIP_ERASE_TIMEOUT_MS     4000
 #define SPI_FLASH_GENERIC_SECTOR_ERASE_TIMEOUT_MS   600  //according to GD25Q127(125°) + 100ms
@@ -60,6 +72,9 @@ DRAM_ATTR flash_chip_dummy_t *rom_flash_chip_dummy = (flash_chip_dummy_t *)&defa
 
 #define HOST_DELAY_INTERVAL_US                      1
 #define CHIP_WAIT_IDLE_INTERVAL_US                  20
+
+#define SPI_FLASH_LINEAR_DENSITY_LAST_VALUE        (0x19)
+#define SPI_FLASH_HEX_A_F_RANGE                    (6)
 
 const DRAM_ATTR flash_chip_op_timeout_t spi_flash_chip_generic_timeout = {
     .idle_timeout = SPI_FLASH_DEFAULT_IDLE_TIMEOUT_MS * 1000,
@@ -70,6 +85,30 @@ const DRAM_ATTR flash_chip_op_timeout_t spi_flash_chip_generic_timeout = {
 };
 
 static const char TAG[] = "chip_generic";
+
+esp_err_t spi_flash_chip_generic_detect_size(esp_flash_t *chip, uint32_t *size)
+{
+    uint32_t id = chip->chip_id;
+    *size = 0;
+
+    /* Can't detect size unless the high byte of the product ID matches the same convention, which is usually 0x40 or
+     * 0xC0 or similar. */
+    if (((id & 0xFFFF) == 0x0000) || ((id & 0xFFFF) == 0xFFFF)) {
+        return ESP_ERR_FLASH_UNSUPPORTED_CHIP;
+    }
+
+    /* Get flash capacity from flash chip id depends on different vendors. According to majority of flash datasheets,
+       Flash 256Mb to 512Mb directly from 0x19 to 0x20, instead of from 0x19 to 0x1a. So here we leave the common behavior.
+       However, some other flash vendors also have their own rule, we will add them in chip specific files.
+     */
+    uint32_t mem_density = (id & 0xFF);
+    if (mem_density > SPI_FLASH_LINEAR_DENSITY_LAST_VALUE) {
+        mem_density -= SPI_FLASH_HEX_A_F_RANGE;
+    }
+
+    *size = 1 << mem_density;
+    return ESP_OK;
+}
 
 #ifndef CONFIG_SPI_FLASH_ROM_IMPL
 
@@ -103,22 +142,6 @@ esp_err_t spi_flash_chip_generic_reset(esp_flash_t *chip)
     err = chip->chip_drv->wait_idle(chip, chip->chip_drv->timeout->idle_timeout);
     return err;
 }
-
-esp_err_t spi_flash_chip_generic_detect_size(esp_flash_t *chip, uint32_t *size)
-{
-    uint32_t id = chip->chip_id;
-    *size = 0;
-
-    /* Can't detect size unless the high byte of the product ID matches the same convention, which is usually 0x40 or
-     * 0xC0 or similar. */
-    if (((id & 0xFFFF) == 0x0000) || ((id & 0xFFFF) == 0xFFFF)) {
-        return ESP_ERR_FLASH_UNSUPPORTED_CHIP;
-    }
-
-    *size = 1 << (id & 0xFF);
-    return ESP_OK;
-}
-
 
 esp_err_t spi_flash_chip_generic_erase_chip(esp_flash_t *chip)
 {
@@ -462,35 +485,35 @@ esp_err_t spi_flash_chip_generic_config_host_io_mode(esp_flash_t *chip, uint32_t
     case SPI_FLASH_QIO:
         //for QIO mode, the 4 bit right after the address are used for continuous mode, should be set to 0 to avoid that.
         addr_bitlen = SPI_FLASH_QIO_ADDR_BITLEN;
-        dummy_cyclelen_base = rom_flash_chip_dummy->qio_dummy_bitlen;
+        dummy_cyclelen_base = (chip->hpm_dummy_ena ? rom_flash_chip_dummy_hpm->qio_dummy_bitlen : rom_flash_chip_dummy->qio_dummy_bitlen);
         read_command = (addr_32bit? CMD_FASTRD_QIO_4B: CMD_FASTRD_QIO);
         conf_required = true;
         break;
     case SPI_FLASH_QOUT:
         addr_bitlen = SPI_FLASH_QOUT_ADDR_BITLEN;
-        dummy_cyclelen_base = rom_flash_chip_dummy->qout_dummy_bitlen;
+        dummy_cyclelen_base = (chip->hpm_dummy_ena ? rom_flash_chip_dummy_hpm->qout_dummy_bitlen : rom_flash_chip_dummy->qout_dummy_bitlen);
         read_command = (addr_32bit? CMD_FASTRD_QUAD_4B: CMD_FASTRD_QUAD);
         break;
     case SPI_FLASH_DIO:
         //for DIO mode, the 4 bit right after the address are used for continuous mode, should be set to 0 to avoid that.
         addr_bitlen = SPI_FLASH_DIO_ADDR_BITLEN;
-        dummy_cyclelen_base = rom_flash_chip_dummy->dio_dummy_bitlen;
+        dummy_cyclelen_base = (chip->hpm_dummy_ena ? rom_flash_chip_dummy_hpm->dio_dummy_bitlen : rom_flash_chip_dummy->dio_dummy_bitlen);
         read_command = (addr_32bit? CMD_FASTRD_DIO_4B: CMD_FASTRD_DIO);
         conf_required = true;
         break;
     case SPI_FLASH_DOUT:
         addr_bitlen = SPI_FLASH_DOUT_ADDR_BITLEN;
-        dummy_cyclelen_base = rom_flash_chip_dummy->dout_dummy_bitlen;
+        dummy_cyclelen_base = (chip->hpm_dummy_ena ? rom_flash_chip_dummy_hpm->dout_dummy_bitlen : rom_flash_chip_dummy->dout_dummy_bitlen);
         read_command = (addr_32bit? CMD_FASTRD_DUAL_4B: CMD_FASTRD_DUAL);
         break;
     case SPI_FLASH_FASTRD:
         addr_bitlen = SPI_FLASH_FASTRD_ADDR_BITLEN;
-        dummy_cyclelen_base = rom_flash_chip_dummy->fastrd_dummy_bitlen;
+        dummy_cyclelen_base = (chip->hpm_dummy_ena ? rom_flash_chip_dummy_hpm->fastrd_dummy_bitlen : rom_flash_chip_dummy->fastrd_dummy_bitlen);
         read_command = (addr_32bit? CMD_FASTRD_4B: CMD_FASTRD);
         break;
     case SPI_FLASH_SLOWRD:
         addr_bitlen = SPI_FLASH_SLOWRD_ADDR_BITLEN;
-        dummy_cyclelen_base = rom_flash_chip_dummy->slowrd_dummy_bitlen;
+        dummy_cyclelen_base = (chip->hpm_dummy_ena ? rom_flash_chip_dummy_hpm->slowrd_dummy_bitlen : rom_flash_chip_dummy->slowrd_dummy_bitlen);
         read_command = (addr_32bit? CMD_READ_4B: CMD_READ);
         break;
     default:

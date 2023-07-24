@@ -63,7 +63,7 @@ typedef struct {
     portMUX_TYPE rmt_spinlock; // Mutex lock for protecting concurrent register/unregister of RMT channels' ISR
     rmt_isr_handle_t rmt_driver_intr_handle;
     rmt_tx_end_callback_t rmt_tx_end_callback;// Event called when transmission is ended
-    uint8_t rmt_driver_channels; // Bitmask of installed drivers' channels
+    uint8_t rmt_driver_channels; // Bitmask of installed drivers' channels, used to protect concurrent register/unregister of RMT channels' ISR
     bool rmt_module_enabled;
     uint32_t synchro_channel_mask; // Bitmap of channels already added in the synchronous group
 } rmt_contex_t;
@@ -951,7 +951,7 @@ esp_err_t rmt_driver_uninstall(rmt_channel_t channel)
 {
     esp_err_t err = ESP_OK;
     ESP_RETURN_ON_FALSE(channel < RMT_CHANNEL_MAX, ESP_ERR_INVALID_ARG, TAG, RMT_CHANNEL_ERROR_STR);
-    ESP_RETURN_ON_FALSE(rmt_contex.rmt_driver_channels & BIT(channel), ESP_ERR_INVALID_STATE, TAG, "No RMT driver for this channel");
+    // we allow to call this uninstall function on the same channel for multiple times
     if (p_rmt_obj[channel] == NULL) {
         return ESP_OK;
     }
@@ -977,17 +977,13 @@ esp_err_t rmt_driver_uninstall(rmt_channel_t channel)
 
     _lock_acquire_recursive(&(rmt_contex.rmt_driver_isr_lock));
     rmt_contex.rmt_driver_channels &= ~BIT(channel);
-    if (rmt_contex.rmt_driver_channels == 0) {
+    if (rmt_contex.rmt_driver_channels == 0 && rmt_contex.rmt_driver_intr_handle) {
         rmt_module_disable();
         // all channels have driver disabled
         err = rmt_isr_deregister(rmt_contex.rmt_driver_intr_handle);
         rmt_contex.rmt_driver_intr_handle = NULL;
     }
     _lock_release_recursive(&(rmt_contex.rmt_driver_isr_lock));
-
-    if (err != ESP_OK) {
-        return err;
-    }
 
     if (p_rmt_obj[channel]->tx_sem) {
         vSemaphoreDelete(p_rmt_obj[channel]->tx_sem);
@@ -1014,13 +1010,12 @@ esp_err_t rmt_driver_uninstall(rmt_channel_t channel)
 
     free(p_rmt_obj[channel]);
     p_rmt_obj[channel] = NULL;
-    return ESP_OK;
+    return err;
 }
 
 esp_err_t rmt_driver_install(rmt_channel_t channel, size_t rx_buf_size, int intr_alloc_flags)
 {
     ESP_RETURN_ON_FALSE(channel < RMT_CHANNEL_MAX, ESP_ERR_INVALID_ARG, TAG, RMT_CHANNEL_ERROR_STR);
-    ESP_RETURN_ON_FALSE((rmt_contex.rmt_driver_channels & BIT(channel)) == 0, ESP_ERR_INVALID_STATE, TAG, "RMT driver already installed for channel");
 
     esp_err_t err = ESP_OK;
 
@@ -1030,10 +1025,10 @@ esp_err_t rmt_driver_install(rmt_channel_t channel, size_t rx_buf_size, int intr
     }
 
 #if CONFIG_RINGBUF_PLACE_ISR_FUNCTIONS_INTO_FLASH
-            if (intr_alloc_flags & ESP_INTR_FLAG_IRAM ) {
-                ESP_LOGE(TAG, "ringbuf ISR functions in flash, but used in IRAM interrupt");
-                return ESP_ERR_INVALID_ARG;
-            }
+    if (intr_alloc_flags & ESP_INTR_FLAG_IRAM ) {
+        ESP_LOGE(TAG, "ringbuf ISR functions in flash, but used in IRAM interrupt");
+        return ESP_ERR_INVALID_ARG;
+    }
 #endif
 
 #if !CONFIG_SPIRAM_USE_MALLOC
@@ -1222,9 +1217,9 @@ esp_err_t rmt_translator_init(rmt_channel_t channel, sample_to_rmt_t fn)
         p_rmt_obj[channel]->tx_buf = (rmt_item32_t *)malloc(block_size);
 #else
         if (p_rmt_obj[channel]->intr_alloc_flags & ESP_INTR_FLAG_IRAM) {
-            p_rmt_obj[channel]->tx_buf = (rmt_item32_t *)malloc(block_size);
-        } else {
             p_rmt_obj[channel]->tx_buf = (rmt_item32_t *)heap_caps_calloc(1, block_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        } else {
+            p_rmt_obj[channel]->tx_buf = (rmt_item32_t *)malloc(block_size);
         }
 #endif
         if (p_rmt_obj[channel]->tx_buf == NULL) {

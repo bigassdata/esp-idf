@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -15,6 +15,11 @@
 #include "random.h"
 #include "sha256.h"
 #include "mbedtls/pk.h"
+
+static int crypto_rng_wrapper(void *ctx, unsigned char *buf, size_t len)
+{
+    return random_get_bytes(buf, len);
+}
 
 struct crypto_bignum *crypto_bignum_init(void)
 {
@@ -157,26 +162,9 @@ int crypto_bignum_mulmod(const struct crypto_bignum *a,
                          const struct crypto_bignum *c,
                          struct crypto_bignum *d)
 {
-    int res;
-#if ALLOW_EVEN_MOD || !CONFIG_MBEDTLS_HARDWARE_MPI // Must enable ALLOW_EVEN_MOD if c is even
-    mbedtls_mpi temp;
-    mbedtls_mpi_init(&temp);
-
-    res = mbedtls_mpi_mul_mpi(&temp, (const mbedtls_mpi *) a, (const mbedtls_mpi *) b);
-    if (res) {
-        return -1;
-    }
-
-    res = mbedtls_mpi_mod_mpi((mbedtls_mpi *) d, &temp, (mbedtls_mpi *) c);
-
-    mbedtls_mpi_free(&temp);
-#else
-    // Works with odd modulus only, but it is faster with HW acceleration
-    res = esp_mpi_mul_mpi_mod((mbedtls_mpi *) d, (mbedtls_mpi *) a, (mbedtls_mpi *) b, (mbedtls_mpi *) c);
-#endif
-    return res ? -1 : 0;
+    return mbedtls_mpi_mul_mpi((mbedtls_mpi *)d, (const mbedtls_mpi *)a, (const mbedtls_mpi *)b) ||
+                               mbedtls_mpi_mod_mpi((mbedtls_mpi *)d, (mbedtls_mpi *)d, (const mbedtls_mpi *)c) ? -1 : 0;
 }
-
 
 int crypto_bignum_sqrmod(const struct crypto_bignum *a,
                          const struct crypto_bignum *b,
@@ -235,6 +223,16 @@ int crypto_bignum_is_one(const struct crypto_bignum *a)
     return (mbedtls_mpi_cmp_int((const mbedtls_mpi *) a, 1) == 0);
 }
 
+int crypto_bignum_is_odd(const struct crypto_bignum *a)
+{
+    return (mbedtls_mpi_get_bit((const mbedtls_mpi *) a, 0) == 1);
+}
+
+int crypto_bignum_rand(struct crypto_bignum *r, const struct crypto_bignum *m)
+{
+    return ((mbedtls_mpi_random((mbedtls_mpi *) r, 0, (const mbedtls_mpi *) m,
+								crypto_rng_wrapper, NULL) != 0) ? -1 : 0);
+}
 
 int crypto_bignum_legendre(const struct crypto_bignum *a,
                            const struct crypto_bignum *p)

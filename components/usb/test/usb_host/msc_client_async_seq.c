@@ -13,11 +13,10 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "test_usb_common.h"
-#include "test_usb_mock_classes.h"
+#include "test_usb_mock_msc.h"
 #include "msc_client.h"
 #include "usb/usb_host.h"
 #include "unity.h"
-#include "test_utils.h"
 
 /*
 Implementation of an MSC client used for USB Host Tests
@@ -62,29 +61,29 @@ static void msc_transfer_cb(usb_transfer_t *transfer)
     switch (msc_obj->cur_stage) {
         case TEST_STAGE_MSC_RESET: {
             //Check MSC SCSI interface reset
-            TEST_ASSERT_EQUAL(USB_TRANSFER_STATUS_COMPLETED, transfer->status);
+            TEST_ASSERT_EQUAL_MESSAGE(USB_TRANSFER_STATUS_COMPLETED, transfer->status, "Transfer NOT completed");
             TEST_ASSERT_EQUAL(transfer->num_bytes, transfer->actual_num_bytes);
             msc_obj->next_stage = TEST_STAGE_MSC_CBW;
             break;
         }
         case TEST_STAGE_MSC_CBW: {
             //Check MSC SCSI CBW transfer
-            TEST_ASSERT_EQUAL(USB_TRANSFER_STATUS_COMPLETED, transfer->status);
+            TEST_ASSERT_EQUAL_MESSAGE(USB_TRANSFER_STATUS_COMPLETED, transfer->status, "Transfer NOT completed");
             TEST_ASSERT_EQUAL(sizeof(mock_msc_bulk_cbw_t), transfer->actual_num_bytes);
             msc_obj->next_stage = TEST_STAGE_MSC_DATA;
             break;
         }
         case TEST_STAGE_MSC_DATA: {
             //Check MSC SCSI data IN transfer
-            TEST_ASSERT_EQUAL(USB_TRANSFER_STATUS_COMPLETED, transfer->status);
+            TEST_ASSERT_EQUAL_MESSAGE(USB_TRANSFER_STATUS_COMPLETED, transfer->status, "Transfer NOT completed");
             TEST_ASSERT_EQUAL(MOCK_MSC_SCSI_SECTOR_SIZE * msc_obj->test_param.num_sectors_per_xfer, transfer->actual_num_bytes);
             msc_obj->next_stage = TEST_STAGE_MSC_CSW;
             break;
         }
         case TEST_STAGE_MSC_CSW: {
             //Check MSC SCSI CSW transfer
-            TEST_ASSERT_EQUAL(USB_TRANSFER_STATUS_COMPLETED, transfer->status);
-            TEST_ASSERT_EQUAL(true, mock_msc_scsi_check_csw((mock_msc_bulk_csw_t *)transfer->data_buffer, msc_obj->test_param.msc_scsi_xfer_tag));
+            TEST_ASSERT_EQUAL_MESSAGE(USB_TRANSFER_STATUS_COMPLETED, transfer->status, "Transfer NOT completed");
+            TEST_ASSERT_TRUE(mock_msc_scsi_check_csw((mock_msc_bulk_csw_t *)transfer->data_buffer, msc_obj->test_param.msc_scsi_xfer_tag));
             msc_obj->num_sectors_read += msc_obj->test_param.num_sectors_per_xfer;
             if (msc_obj->num_sectors_read < msc_obj->test_param.num_sectors_to_read) {
                 msc_obj->next_stage = TEST_STAGE_MSC_CBW;
@@ -192,6 +191,8 @@ void msc_client_async_seq_task(void *arg)
                 xfer_out->num_bytes = sizeof(usb_setup_packet_t);
                 xfer_out->bEndpointAddress = 0;
                 TEST_ASSERT_EQUAL(ESP_OK, usb_host_transfer_submit_control(msc_obj.client_hdl, xfer_out));
+                //Test that an inflight control transfer cannot be resubmitted
+                TEST_ASSERT_EQUAL(ESP_ERR_NOT_FINISHED, usb_host_transfer_submit_control(msc_obj.client_hdl, xfer_out));
                 //Next stage set from transfer callback
                 break;
             }
@@ -201,6 +202,8 @@ void msc_client_async_seq_task(void *arg)
                 xfer_out->num_bytes = sizeof(mock_msc_bulk_cbw_t);
                 xfer_out->bEndpointAddress = MOCK_MSC_SCSI_BULK_OUT_EP_ADDR;
                 TEST_ASSERT_EQUAL(ESP_OK, usb_host_transfer_submit(xfer_out));
+                //Test that an inflight transfer cannot be resubmitted
+                TEST_ASSERT_EQUAL(ESP_ERR_NOT_FINISHED, usb_host_transfer_submit(xfer_out));
                 //Next stage set from transfer callback
                 break;
             }
@@ -209,6 +212,8 @@ void msc_client_async_seq_task(void *arg)
                 xfer_in->num_bytes = usb_round_up_to_mps(MOCK_MSC_SCSI_SECTOR_SIZE * msc_obj.test_param.num_sectors_per_xfer, MOCK_MSC_SCSI_BULK_EP_MPS);
                 xfer_in->bEndpointAddress = MOCK_MSC_SCSI_BULK_IN_EP_ADDR;
                 TEST_ASSERT_EQUAL(ESP_OK, usb_host_transfer_submit(xfer_in));
+                //Test that an inflight transfer cannot be resubmitted
+                TEST_ASSERT_EQUAL(ESP_ERR_NOT_FINISHED, usb_host_transfer_submit(xfer_in));
                 //Next stage set from transfer callback
                 break;
             }
@@ -217,6 +222,8 @@ void msc_client_async_seq_task(void *arg)
                 xfer_in->num_bytes = usb_round_up_to_mps(sizeof(mock_msc_bulk_csw_t), MOCK_MSC_SCSI_BULK_EP_MPS);
                 xfer_in->bEndpointAddress = MOCK_MSC_SCSI_BULK_IN_EP_ADDR;
                 TEST_ASSERT_EQUAL(ESP_OK, usb_host_transfer_submit(xfer_in));
+                //Test that an inflight transfer cannot be resubmitted
+                TEST_ASSERT_EQUAL(ESP_ERR_NOT_FINISHED, usb_host_transfer_submit(xfer_in));
                 //Next stage set from transfer callback
                 break;
             }
