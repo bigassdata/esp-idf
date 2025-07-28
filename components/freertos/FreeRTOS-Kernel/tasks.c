@@ -777,6 +777,44 @@ static void prvResetNextTaskUnblockTime( void ) PRIVILEGED_FUNCTION;
 
 #endif
 
+#include <stdio.h>
+
+struct entry_log
+{
+    const char *pcName;
+    uint32_t    usStackDepth;
+    uint32_t    usStackMin;
+    TCB_t      *pTcb;
+    bool        dead;
+};
+
+size_t           TASK_CREATE_LOG_ENTRIES = 0;
+struct entry_log TASK_CREATE_LOG[50]     = {};
+
+void LogTask(const char *const pcName, const uint32_t usStackDepth, TCB_t *pTcb)
+{
+    if (TASK_CREATE_LOG_ENTRIES < 50)
+    {
+        TASK_CREATE_LOG[TASK_CREATE_LOG_ENTRIES].pcName       = pcName;
+        TASK_CREATE_LOG[TASK_CREATE_LOG_ENTRIES].usStackDepth = usStackDepth;
+        TASK_CREATE_LOG[TASK_CREATE_LOG_ENTRIES].usStackMin   = usStackDepth;
+        TASK_CREATE_LOG[TASK_CREATE_LOG_ENTRIES].pTcb         = pTcb;
+        TASK_CREATE_LOG_ENTRIES++;
+    }
+}
+
+void LogDeadTask(TCB_t *pTcb)
+{
+    for (int i = 0; i < TASK_CREATE_LOG_ENTRIES; i++)
+    {
+        if (TASK_CREATE_LOG[i].pTcb == pTcb)
+        {
+            TASK_CREATE_LOG[i].dead = true;
+        }
+    }
+}
+
+
 /*
  * Called after a Task_t structure has been allocated either statically or
  * dynamically to fill in the structure's members.
@@ -1021,6 +1059,8 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
 {
     StackType_t * pxTopOfStack;
     UBaseType_t x;
+
+    LogTask(pcName, ulStackDepth, pxNewTCB);
 
     #if ( portUSING_MPU_WRAPPERS == 1 )
         /* Should the task be created in privileged mode? */
@@ -4897,6 +4937,7 @@ static void prvCheckTasksWaitingTermination( void )
         /* This call is required specifically for the TriCore port.  It must be
          * above the vPortFree() calls.  The call is also used by ports/demos that
          * want to allocate and clean RAM statically. */
+        LogDeadTask(pxTCB);
         portCLEAN_UP_TCB( pxTCB );
 
         #if ( ( configUSE_NEWLIB_REENTRANT == 1 ) || ( configUSE_C_RUNTIME_TLS_SUPPORT == 1 ) )
