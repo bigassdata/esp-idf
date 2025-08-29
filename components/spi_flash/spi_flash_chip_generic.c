@@ -84,8 +84,6 @@ const DRAM_ATTR flash_chip_op_timeout_t spi_flash_chip_generic_timeout = {
     } \
 } while(0)
 
-static const char TAG[] = "chip_generic";
-
 esp_err_t spi_flash_chip_generic_detect_size(esp_flash_t *chip, uint32_t *size)
 {
     uint32_t id = chip->chip_id;
@@ -235,7 +233,6 @@ esp_err_t spi_flash_chip_generic_read(esp_flash_t *chip, void *buffer, uint32_t 
     err = chip->chip_drv->config_host_io_mode(chip, config_io_flags);
 
     if (err == ESP_ERR_NOT_SUPPORTED) {
-        ESP_LOGE(TAG, "configure host io mode failed - unsupported");
         return err;
     }
 
@@ -594,7 +591,6 @@ esp_err_t spi_flash_chip_generic_read_unique_id(esp_flash_t *chip, uint64_t* fla
     esp_err_t err = chip->host->driver->common_command(chip->host, &transfer);
 
     if (unique_id_buf == 0 || unique_id_buf == UINT64_MAX) {
-        ESP_EARLY_LOGE(TAG, "No response from device when trying to retrieve Unique ID\n");
         *flash_unique_id = unique_id_buf;
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -789,13 +785,11 @@ esp_err_t spi_flash_common_set_io_mode(esp_flash_t *chip, esp_flash_wrsr_func_t 
         if (ret != ESP_OK) {
             return ret;
         }
-        ESP_EARLY_LOGD(TAG, "set_io_mode: status before 0x%x", sr);
         if (is_quad_mode) {
             sr_update = sr | qe_sr_bit;
         } else {
             sr_update = sr & (~qe_sr_bit);
         }
-        ESP_EARLY_LOGV(TAG, "set_io_mode: status update 0x%x", sr_update);
         if (sr != sr_update) {
             update_config = true;
         }
@@ -829,7 +823,6 @@ esp_err_t spi_flash_common_set_io_mode(esp_flash_t *chip, esp_flash_wrsr_func_t 
         if (ret != ESP_OK) {
             return ret;
         }
-        ESP_EARLY_LOGD(TAG, "set_io_mode: status after 0x%x", sr);
         if (sr != sr_update) {
             ret = ESP_ERR_FLASH_NO_RESPONSE;
         }

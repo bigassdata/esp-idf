@@ -212,7 +212,7 @@ uint32_t rtc_clk_apll_coeff_calc(uint32_t freq, uint32_t *_o_div, uint32_t *_sdm
     uint32_t xtal_freq_mhz = (uint32_t)rtc_clk_xtal_freq_get();
     if (xtal_freq_mhz == 0) {
         // xtal_freq has not set yet
-        ESP_HW_LOGE(TAG, "Get xtal clock frequency failed, it has not been set yet");
+        //ESP_HW_LOGE(TAG, "Get xtal clock frequency failed, it has not been set yet");
         abort();
     }
     /* Reference formula: apll_freq = xtal_freq * (4 + sdm2 + sdm1/256 + sdm0/65536) / ((o_div + 2) * 2)
@@ -229,7 +229,7 @@ uint32_t rtc_clk_apll_coeff_calc(uint32_t freq, uint32_t *_o_div, uint32_t *_sdm
      * 350 MHz / ((31 + 2) * 2) = 5303031 Hz (for ceil) */
     o_div = (int)(CLK_LL_APLL_MULTIPLIER_MIN_HZ / (float)(freq * 2) + 1) - 2;
     if (o_div > 31) {
-        ESP_HW_LOGE(TAG, "Expected frequency is too small");
+        //ESP_HW_LOGE(TAG, "Expected frequency is too small");
         return 0;
     }
     if (o_div < 0) {
@@ -239,7 +239,7 @@ uint32_t rtc_clk_apll_coeff_calc(uint32_t freq, uint32_t *_o_div, uint32_t *_sdm
          * 500 MHz / ((0 + 2) * 2) = 125000000 Hz */
         o_div = (int)(CLK_LL_APLL_MULTIPLIER_MAX_HZ / (float)(freq * 2)) - 2;
         if (o_div < 0) {
-            ESP_HW_LOGE(TAG, "Expected frequency is too big");
+            //ESP_HW_LOGE(TAG, "Expected frequency is too big");
             return 0;
         }
     }
@@ -571,7 +571,7 @@ void rtc_clk_cpu_freq_get_config(rtc_cpu_freq_config_t* out_config)
             source_freq_mhz = CLK_LL_PLL_480M_FREQ_MHZ;
             div = 2;
         } else {
-            ESP_HW_LOGE(TAG, "unsupported frequency configuration");
+            //ESP_HW_LOGE(TAG, "unsupported frequency configuration");
             abort();
         }
         break;
@@ -583,7 +583,7 @@ void rtc_clk_cpu_freq_get_config(rtc_cpu_freq_config_t* out_config)
         break;
     case SOC_CPU_CLK_SRC_APLL:
     default:
-        ESP_HW_LOGE(TAG, "unsupported frequency configuration");
+        //ESP_HW_LOGE(TAG, "unsupported frequency configuration");
         abort();
     }
     *out_config = (rtc_cpu_freq_config_t) {

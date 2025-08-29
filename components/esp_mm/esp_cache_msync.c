@@ -23,6 +23,23 @@
 #include "esp_private/esp_cache_private.h"
 #include "esp_private/critical_section.h"
 
+/**
+ * A version of ESP_RETURN_ON_FALSE() macro that can be called from ISR.
+ */
+#undef ESP_RETURN_ON_FALSE_ISR
+#define ESP_RETURN_ON_FALSE_ISR(a, err_code, log_tag, format, ...) do {                         \
+        if (unlikely(!(a))) {                                                                   \
+            return err_code;                                                                    \
+        }                                                                                       \
+    } while(0)
+
+#undef ESP_RETURN_ON_FALSE
+#define ESP_RETURN_ON_FALSE(a, err_code, log_tag, format, ...) do {                             \
+        if (unlikely(!(a))) {                                                                   \
+            return err_code;                                                                    \
+        }                                                                                       \
+    } while(0)
+
 static const char *TAG = "cache";
 
 #define ALIGN_UP_BY(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
@@ -152,9 +169,14 @@ esp_err_t esp_cache_msync(void *addr, size_t size, int flags)
 //split into a non-deprecated internal function and the stubbed external deprecated function.
 static esp_err_t esp_cache_aligned_malloc_internal(size_t size, uint32_t heap_caps, void **out_ptr, size_t *actual_size)
 {
-    ESP_RETURN_ON_FALSE_ISR(out_ptr, ESP_ERR_INVALID_ARG, TAG, "null pointer");
+    if (unlikely(!out_ptr)) {
+        return ESP_ERR_INVALID_ARG;
+    }
     uint32_t valid_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA;
-    ESP_RETURN_ON_FALSE_ISR((heap_caps & valid_caps) > 0, ESP_ERR_INVALID_ARG, TAG, "not supported cap matches");
+
+    if (unlikely(!(heap_caps & valid_caps))) {
+        return ESP_ERR_INVALID_ARG;
+    }
 
     uint32_t cache_level = CACHE_LL_LEVEL_INT_MEM;
     uint32_t data_cache_line_size = 0;
