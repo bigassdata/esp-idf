@@ -295,6 +295,7 @@ static const esp_vhci_host_callback_t dummy_vhci_host_cb = {
     .notify_host_send_available = dummy_controller_rcv_pkt_ready,
     .notify_host_recv = dummy_host_rcv_pkt,
 };
+extern void ZWB_HEAP_DETAIL_DUMP(unsigned int where);
 
 
 extern void ble_transport_init(void);
@@ -305,6 +306,7 @@ esp_err_t esp_nimble_hci_init(void)
     esp_err_t ret;
 
     ret = ble_buf_alloc();
+    ZWB_HEAP_DETAIL_DUMP(221);
     if (ret != ESP_OK) {
         goto err;
     }
@@ -313,6 +315,7 @@ esp_err_t esp_nimble_hci_init(void)
     }
 
     ble_transport_init();
+    ZWB_HEAP_DETAIL_DUMP(222);
 
     vhci_send_sem = xSemaphoreCreateBinary();
     if (vhci_send_sem == NULL) {
