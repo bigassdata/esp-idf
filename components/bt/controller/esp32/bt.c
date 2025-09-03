@@ -232,6 +232,7 @@ extern void btdm_controller_scan_duplicate_list_clear(void);
 extern void esp_bt_controller_shutdown(void);
 extern void sdk_config_set_bt_pll_track_enable(bool enable);
 extern void sdk_config_set_uart_flow_ctrl_enable(bool enable);
+extern void ZWB_HEAP_DETAIL_DUMP(unsigned int where);
 
 extern char _bss_start_btdm;
 extern char _bss_end_btdm;
@@ -1627,6 +1628,8 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 #if CONFIG_BTDM_CTRL_HLI
     hli_queue_setup_pinned_to_core(CONFIG_BTDM_CTRL_PINNED_TO_CORE);
 #endif /* CONFIG_BTDM_CTRL_HLI */
+    ZWB_HEAP_DETAIL_DUMP(10);
+
 
     //if all the bt available memory was already released, cannot initialize bluetooth controller
     if (btdm_dram_available_region[0].mode == ESP_BT_MODE_IDLE) {
@@ -1637,11 +1640,14 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
     if (osi_funcs_p == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    ZWB_HEAP_DETAIL_DUMP(20);
+
 
     memcpy(osi_funcs_p, &osi_funcs_ro, sizeof(struct osi_funcs_t));
     if (btdm_osi_funcs_register(osi_funcs_p) != 0) {
         return ESP_ERR_INVALID_ARG;
     }
+    ZWB_HEAP_DETAIL_DUMP(30);
 
     if (btdm_controller_status != ESP_BT_CONTROLLER_STATUS_IDLE) {
         return ESP_ERR_INVALID_STATE;
@@ -1673,30 +1679,42 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
         err = ESP_ERR_NO_MEM;
         goto error;
     }
+    ZWB_HEAP_DETAIL_DUMP(40);
 
     esp_phy_modem_init();
+    ZWB_HEAP_DETAIL_DUMP(45);
 
     esp_bt_power_domain_on();
+    ZWB_HEAP_DETAIL_DUMP(50);
 
     btdm_controller_mem_init();
+    ZWB_HEAP_DETAIL_DUMP(55);
 
     periph_module_enable(PERIPH_BT_MODULE);
+    ZWB_HEAP_DETAIL_DUMP(60);
+
     periph_module_reset(PERIPH_BT_MODULE);
+    ZWB_HEAP_DETAIL_DUMP(65);
+
 
 #if CONFIG_BTDM_CTRL_HCI_UART_FLOW_CTRL_EN
     sdk_config_set_uart_flow_ctrl_enable(true);
 #else
     sdk_config_set_uart_flow_ctrl_enable(false);
 #endif
+    ZWB_HEAP_DETAIL_DUMP(70);
 
     if ((err = btdm_low_power_mode_init()) != ESP_OK) {
         ESP_LOGE(BTDM_LOG_TAG, "Low power module initialization failed");
         goto error;
     }
+    ZWB_HEAP_DETAIL_DUMP(75);
+
 
 #if CONFIG_SW_COEXIST_ENABLE
     coex_init();
 #endif
+    ZWB_HEAP_DETAIL_DUMP(80);
 
 #if CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED
     if (ble_log_spi_out_init() != 0) {
@@ -1707,8 +1725,10 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 #endif // CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED
 
     btdm_cfg_mask = btdm_config_mask_load();
+    ZWB_HEAP_DETAIL_DUMP(85);
 
     err = btdm_controller_init(btdm_cfg_mask, cfg);
+    ZWB_HEAP_DETAIL_DUMP(90);
 
     if (err != 0) {
         ESP_LOGE(BTDM_LOG_TAG, "%s %d\n",__func__,err);
@@ -1721,9 +1741,18 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 #endif // CONFIG_BT_BLUEDROID_ENABLED
 #if defined(CONFIG_BT_NIMBLE_ENABLED) || defined(CONFIG_BT_BLUEDROID_ENABLED)
     bt_stack_enableCoexVsCmd(true);
+    ZWB_HEAP_DETAIL_DUMP(92);
+
+
     scan_stack_enableAdvFlowCtrlVsCmd(true);
+    ZWB_HEAP_DETAIL_DUMP(94);
+
     adv_stack_enableClearLegacyAdvVsCmd(true);
+    ZWB_HEAP_DETAIL_DUMP(96);
+
     advFilter_stack_enableDupExcListVsCmd(true);
+    ZWB_HEAP_DETAIL_DUMP(98);
+
 #endif // (CONFIG_BT_NIMBLE_ENABLED) || (CONFIG_BT_BLUEDROID_ENABLED)
 
     btdm_controller_status = ESP_BT_CONTROLLER_STATUS_INITED;
