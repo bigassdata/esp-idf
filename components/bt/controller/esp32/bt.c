@@ -234,6 +234,7 @@ extern int coex_wifi_channel_get(uint8_t *primary, uint8_t *secondary);
 extern int coex_register_wifi_channel_change_callback(void *cb);
 /* Shutdown */
 extern void esp_bt_controller_shutdown(void);
+extern void ZWB_HEAP_DETAIL_DUMP(unsigned int where);
 
 extern char _bss_start_btdm;
 extern char _bss_end_btdm;
@@ -1463,6 +1464,8 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 #if CONFIG_BTDM_CTRL_HLI
     hli_queue_setup_pinned_to_core(CONFIG_BTDM_CTRL_PINNED_TO_CORE);
 #endif /* CONFIG_BTDM_CTRL_HLI */
+    ZWB_HEAP_DETAIL_DUMP(10);
+
 
     //if all the bt available memory was already released, cannot initialize bluetooth controller
     if (btdm_dram_available_region[0].mode == ESP_BT_MODE_IDLE) {
@@ -1473,11 +1476,14 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
     if (osi_funcs_p == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    ZWB_HEAP_DETAIL_DUMP(20);
+
 
     memcpy(osi_funcs_p, &osi_funcs_ro, sizeof(struct osi_funcs_t));
     if (btdm_osi_funcs_register(osi_funcs_p) != 0) {
         return ESP_ERR_INVALID_ARG;
     }
+    ZWB_HEAP_DETAIL_DUMP(30);
 
     if (btdm_controller_status != ESP_BT_CONTROLLER_STATUS_IDLE) {
         return ESP_ERR_INVALID_STATE;
@@ -1509,14 +1515,20 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
         err = ESP_ERR_NO_MEM;
         goto error;
     }
+    ZWB_HEAP_DETAIL_DUMP(40);
 
     esp_phy_modem_init();
+    ZWB_HEAP_DETAIL_DUMP(45);
 
     esp_bt_power_domain_on();
+    ZWB_HEAP_DETAIL_DUMP(50);
 
     btdm_controller_mem_init();
+    ZWB_HEAP_DETAIL_DUMP(55);
 
     periph_module_enable(PERIPH_BT_MODULE);
+    ZWB_HEAP_DETAIL_DUMP(60);
+
 
 #ifdef CONFIG_PM_ENABLE
     s_btdm_allow_light_sleep = false;
@@ -1544,6 +1556,7 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 #else
     btdm_lpclk_sel = BTDM_LPCLK_SEL_XTAL; // set default value
 #endif
+    ZWB_HEAP_DETAIL_DUMP(70);
 
     bool select_src_ret __attribute__((unused));
     bool set_div_ret __attribute__((unused));
@@ -1563,12 +1576,14 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
         assert(btdm_lpcycle_us != 0);
     }
     btdm_controller_set_sleep_mode(BTDM_MODEM_SLEEP_MODE_ORIG);
+    ZWB_HEAP_DETAIL_DUMP(75);
 
 #elif CONFIG_BTDM_CTRL_MODEM_SLEEP_MODE_EVED
     btdm_controller_set_sleep_mode(BTDM_MODEM_SLEEP_MODE_EVED);
 #else
     btdm_controller_set_sleep_mode(BTDM_MODEM_SLEEP_MODE_NONE);
 #endif
+    ZWB_HEAP_DETAIL_DUMP(80);
 
 #ifdef CONFIG_PM_ENABLE
     if (!s_btdm_allow_light_sleep) {
@@ -1593,6 +1608,7 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 
 #if CONFIG_SW_COEXIST_ENABLE
     coex_init();
+    ZWB_HEAP_DETAIL_DUMP(85);
 #endif
 
     btdm_cfg_mask = btdm_config_mask_load();
@@ -1601,6 +1617,7 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
         err = ESP_ERR_NO_MEM;
         goto error;
     }
+    ZWB_HEAP_DETAIL_DUMP(90);
 
     btdm_controller_status = ESP_BT_CONTROLLER_STATUS_INITED;
 

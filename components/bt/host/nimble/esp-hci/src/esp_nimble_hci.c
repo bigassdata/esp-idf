@@ -393,6 +393,8 @@ static const esp_vhci_host_callback_t vhci_host_cb = {
     .notify_host_recv = host_rcv_pkt,
 };
 
+extern void ZWB_HEAP_DETAIL_DUMP(unsigned int where);
+
 static void ble_buf_free(void)
 {
     os_msys_buf_free();
@@ -440,6 +442,7 @@ esp_err_t esp_nimble_hci_init(void)
     esp_err_t ret;
 
     ret = ble_buf_alloc();
+    ZWB_HEAP_DETAIL_DUMP(221);
     if (ret != ESP_OK) {
         goto err;
     }
@@ -448,6 +451,7 @@ esp_err_t esp_nimble_hci_init(void)
     }
 
     ble_hci_transport_init();
+    ZWB_HEAP_DETAIL_DUMP(222);
 
     vhci_send_sem = xSemaphoreCreateBinary();
     if (vhci_send_sem == NULL) {
